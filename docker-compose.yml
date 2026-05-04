@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-toniq}
+      POSTGRES_USER: ${POSTGRES_USER:-toniq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toniq}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h 127.0.0.1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+    image: ${APP_IMAGE_REPOSITORY:-toniq}:${APP_IMAGE_TAG:-local}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: -Dvaadin.productionMode=true
+      MAIN_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-toniq}
+      MAIN_DATASOURCE_USERNAME: ${POSTGRES_USER:-toniq}
+      MAIN_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-toniq}
+      SERVER_PORT: 8080
+      VAADIN_LAUNCH_BROWSER: "false"
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

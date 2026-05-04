@@ -30,3 +30,42 @@ The application will be available at <http://localhost:8080>.
 The default user credentials are:
 * Login: `admin`
 * Password: `admin`
+
+## Docker Compose
+
+To run the application with PostgreSQL in Docker:
+
+```bash
+docker compose up --build
+```
+
+By default, the stack starts:
+* PostgreSQL on `localhost:5432`
+* Application on <http://localhost:8080>
+
+You can override ports and database credentials with environment variables such as `APP_PORT`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+
+## Deploy
+
+The repository now includes the same basic operational layout as `bots/lottery`:
+* `Makefile`
+* `scripts/deploy_release.sh`
+* `scripts/rollout_release.sh`
+* `scripts/rollback_release.sh`
+* `scripts/runtime_control.sh`
+
+Prepare environment files from the templates:
+
+```bash
+cp .env.prod.example .env.prod
+cp .env.test.example .env.test
+```
+
+Useful commands:
+
+```bash
+make deploy env=test
+make deploy env=prod tag=v1.2.3
+make restart env=prod
+make reload-env env=test
+```

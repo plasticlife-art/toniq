@@ -29,3 +29,7 @@ vite.generated.ts
 webpack.generated.js
 
 .DS_Store
+.env.prod
+.env.test
+.deploy-*.lock
+backups/

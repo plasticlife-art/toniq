@@ -1,0 +1,56 @@
+name: Deploy Test
+
+on:
+  workflow_run:
+    workflows: ["Docker"]
+    types: [completed]
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      }}
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Install SSH key
+        env:
+          TEST_DEPLOY_SSH_KEY: ${{ secrets.TEST_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$TEST_DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+
+      - name: Trust deploy host
+        env:
+          TEST_DEPLOY_HOST: ${{ secrets.TEST_DEPLOY_HOST }}
+          TEST_DEPLOY_PORT: ${{ secrets.TEST_DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          ssh-keyscan -p "${TEST_DEPLOY_PORT:-22}" "$TEST_DEPLOY_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy exact main build to test
+        env:
+          TEST_DEPLOY_HOST: ${{ secrets.TEST_DEPLOY_HOST }}
+          TEST_DEPLOY_PORT: ${{ secrets.TEST_DEPLOY_PORT }}
+          TEST_DEPLOY_USER: ${{ secrets.TEST_DEPLOY_USER }}
+          TEST_DEPLOY_PATH: ${{ secrets.TEST_DEPLOY_PATH }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          remote_path="$(printf '%q' "$TEST_DEPLOY_PATH")"
+          remote_ref="$(printf '%q' "$WORKFLOW_HEAD_SHA")"
+          remote_image_tag="$(printf '%q' "sha-$WORKFLOW_HEAD_SHA")"
+
+          ssh -p "${TEST_DEPLOY_PORT:-22}" "${TEST_DEPLOY_USER}@${TEST_DEPLOY_HOST}" \
+            "cd ${remote_path} && ./scripts/deploy_release.sh --env test --yes --git-ref ${remote_ref} --image-tag ${remote_image_tag}"
