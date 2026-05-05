@@ -5,7 +5,7 @@ import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.server.PWA;
 import com.vaadin.flow.theme.Theme;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 @Theme(value = "toniq")
 @PWA(name = "Toniq", shortName = "Toniq", offline = false)
 @SpringBootApplication
+@Slf4j
 public class ToniqApplication implements AppShellConfigurator {
 
     @Autowired
@@ -48,7 +49,7 @@ public class ToniqApplication implements AppShellConfigurator {
 
     @EventListener
     public void printApplicationUrl(final ApplicationStartedEvent event) {
-        LoggerFactory.getLogger(ToniqApplication.class).info("Application started at "
+        log.info("Application started at "
                 + "http://localhost:"
                 + environment.getProperty("local.server.port")
                 + Strings.nullToEmpty(environment.getProperty("server.servlet.context-path")));

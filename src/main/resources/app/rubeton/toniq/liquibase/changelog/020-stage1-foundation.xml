@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20-1" author="toniq">
+        <createTable tableName="TONIQ_ORGANISER">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="MEGATIX_ORGANISER_ID" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="NAME" type="varchar(255)"/>
+            <column name="EMAIL" type="varchar(255)"/>
+            <column name="RAW_PAYLOAD_JSON" type="clob"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="IDX_TONIQ_ORGANISER_ON_MEGATIX_ORGANISER_ID"
+                     tableName="TONIQ_ORGANISER" unique="true">
+            <column name="MEGATIX_ORGANISER_ID"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-2" author="toniq">
+        <createTable tableName="TONIQ_EVENT">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="MEGATIX_EVENT_ID" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ORGANISER_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="TITLE" type="varchar(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="SLUG" type="varchar(255)"/>
+            <column name="DESCRIPTION_" type="clob"/>
+            <column name="VENUE_NAME" type="varchar(255)"/>
+            <column name="VENUE_JSON" type="clob"/>
+            <column name="PHOTOS_JSON" type="clob"/>
+            <column name="EVENT_START_AT" type="timestamp"/>
+            <column name="EVENT_END_AT" type="timestamp"/>
+            <column name="TIMEZONE_NAME" type="varchar(255)"/>
+            <column name="MEGATIX_STATUS" type="varchar(255)"/>
+            <column name="RAW_PAYLOAD_JSON" type="clob"/>
+            <column name="DELETED_AT" type="timestamp"/>
+            <column name="DELETED_BY" type="varchar(255)"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT"
+                                 baseColumnNames="ORGANISER_ID"
+                                 constraintName="FK_TONIQ_EVENT_ON_ORGANISER"
+                                 referencedTableName="TONIQ_ORGANISER"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_ON_MEGATIX_EVENT_ID"
+                     tableName="TONIQ_EVENT" unique="true">
+            <column name="MEGATIX_EVENT_ID"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_ON_ORGANISER_ID"
+                     tableName="TONIQ_EVENT">
+            <column name="ORGANISER_ID"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_ON_DELETED_AT"
+                     tableName="TONIQ_EVENT">
+            <column name="DELETED_AT"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_ON_SLUG"
+                     tableName="TONIQ_EVENT" unique="true">
+            <column name="SLUG"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-3" author="toniq">
+        <createTable tableName="TONIQ_EVENT_PUBLICATION">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EVENT_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CRYPTO_ENABLED" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PUBLISHED" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PUBLICATION_STATE" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PUBLICATION_REASON" type="varchar(255)"/>
+            <column name="FIRST_PUBLISHED_AT" type="timestamp"/>
+            <column name="LAST_PUBLISHED_AT" type="timestamp"/>
+            <column name="LAST_UNPUBLISHED_AT" type="timestamp"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT_PUBLICATION"
+                                 baseColumnNames="EVENT_ID"
+                                 constraintName="FK_TONIQ_EVENT_PUBLICATION_ON_EVENT"
+                                 referencedTableName="TONIQ_EVENT"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_PUBLICATION_ON_EVENT_ID"
+                     tableName="TONIQ_EVENT_PUBLICATION" unique="true">
+            <column name="EVENT_ID"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_PUBLICATION_ON_CRYPTO_PUBLISHED"
+                     tableName="TONIQ_EVENT_PUBLICATION">
+            <column name="CRYPTO_ENABLED"/>
+            <column name="PUBLISHED"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_PUBLICATION_ON_STATE"
+                     tableName="TONIQ_EVENT_PUBLICATION">
+            <column name="PUBLICATION_STATE"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-4" author="toniq">
+        <createTable tableName="TONIQ_EVENT_SYNC_STATE">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EVENT_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="LAST_SYNCED_AT" type="timestamp"/>
+            <column name="LAST_SYNC_RESULT" type="varchar(50)"/>
+            <column name="LAST_SYNC_ERROR" type="clob"/>
+            <column name="LAST_EVENT_DATA_SYNC_AT" type="timestamp"/>
+            <column name="LAST_AVAILABILITY_SYNC_AT" type="timestamp"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT_SYNC_STATE"
+                                 baseColumnNames="EVENT_ID"
+                                 constraintName="FK_TONIQ_EVENT_SYNC_STATE_ON_EVENT"
+                                 referencedTableName="TONIQ_EVENT"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_STATE_ON_EVENT_ID"
+                     tableName="TONIQ_EVENT_SYNC_STATE" unique="true">
+            <column name="EVENT_ID"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_STATE_ON_EVENT_DATA_SYNC_AT"
+                     tableName="TONIQ_EVENT_SYNC_STATE">
+            <column name="LAST_EVENT_DATA_SYNC_AT"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_STATE_ON_AVAIL_SYNC_AT"
+                     tableName="TONIQ_EVENT_SYNC_STATE">
+            <column name="LAST_AVAILABILITY_SYNC_AT"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-5" author="toniq">
+        <createTable tableName="TONIQ_EVENT_TICKET_TIER">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EVENT_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="MEGATIX_TIER_ID" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="NAME" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="DESCRIPTION_" type="varchar(1000)"/>
+            <column name="CURRENCY_CODE" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="FACE_PRICE" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="AVAILABILITY_COUNT" type="int"/>
+            <column name="AVAILABILITY_STATE" type="varchar(50)"/>
+            <column name="SALES_STARTS_AT" type="timestamp"/>
+            <column name="SALES_ENDS_AT" type="timestamp"/>
+            <column name="DISPLAY_ORDER" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="IS_ACTIVE" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="LAST_AVAILABILITY_SYNC_AT" type="timestamp"/>
+            <column name="RAW_PAYLOAD_JSON" type="clob"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT_TICKET_TIER"
+                                 baseColumnNames="EVENT_ID"
+                                 constraintName="FK_TONIQ_EVENT_TIER_ON_EVENT"
+                                 referencedTableName="TONIQ_EVENT"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_TIER_ON_EVENT_MEGATIX"
+                     tableName="TONIQ_EVENT_TICKET_TIER" unique="true">
+            <column name="EVENT_ID"/>
+            <column name="MEGATIX_TIER_ID"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_TIER_ON_EVENT_DISPLAY_ORDER"
+                     tableName="TONIQ_EVENT_TICKET_TIER">
+            <column name="EVENT_ID"/>
+            <column name="DISPLAY_ORDER"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-6" author="toniq">
+        <createTable tableName="TONIQ_EVENT_SYNC_LOG">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EVENT_ID" type="${uuid.type}"/>
+            <column name="MEGATIX_EVENT_ID" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="TRIGGER_SOURCE" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="SYNC_SCOPE" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATUS" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="REQUEST_PAYLOAD_JSON" type="clob"/>
+            <column name="RESPONSE_PAYLOAD_JSON" type="clob"/>
+            <column name="ERROR_CODE" type="varchar(255)"/>
+            <column name="ERROR_MESSAGE" type="clob"/>
+            <column name="STARTED_AT" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="FINISHED_AT" type="timestamp"/>
+            <column name="CREATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT_SYNC_LOG"
+                                 baseColumnNames="EVENT_ID"
+                                 constraintName="FK_TONIQ_EVENT_SYNC_LOG_ON_EVENT"
+                                 referencedTableName="TONIQ_EVENT"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_LOG_ON_EVENT_CREATED_AT"
+                     tableName="TONIQ_EVENT_SYNC_LOG">
+            <column name="EVENT_ID"/>
+            <column name="CREATED_AT"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_LOG_ON_MEGATIX_CREATED_AT"
+                     tableName="TONIQ_EVENT_SYNC_LOG">
+            <column name="MEGATIX_EVENT_ID"/>
+            <column name="CREATED_AT"/>
+        </createIndex>
+        <createIndex indexName="IDX_TONIQ_EVENT_SYNC_LOG_ON_TRIGGER_CREATED_AT"
+                     tableName="TONIQ_EVENT_SYNC_LOG">
+            <column name="TRIGGER_SOURCE"/>
+            <column name="CREATED_AT"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20-7" author="toniq">
+        <createTable tableName="TONIQ_EVENT_STATUS_OVERRIDE">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EVENT_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="OVERRIDE_STATUS" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="RESCHEDULED_EVENT_START_AT" type="timestamp"/>
+            <column name="RESCHEDULED_EVENT_END_AT" type="timestamp"/>
+            <column name="ADMIN_NOTE" type="clob"/>
+            <column name="ACTOR_IDENTIFIER" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="IS_ACTIVE" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CREATED_AT" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CLEARED_AT" type="timestamp"/>
+            <column name="CLEARED_BY" type="varchar(255)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_EVENT_STATUS_OVERRIDE"
+                                 baseColumnNames="EVENT_ID"
+                                 constraintName="FK_TONIQ_EVENT_STATUS_OVERRIDE_ON_EVENT"
+                                 referencedTableName="TONIQ_EVENT"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_EVENT_STATUS_OVERRIDE_ON_EVENT_ACTIVE_CREATED"
+                     tableName="TONIQ_EVENT_STATUS_OVERRIDE">
+            <column name="EVENT_ID"/>
+            <column name="IS_ACTIVE"/>
+            <column name="CREATED_AT"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

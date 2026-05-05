@@ -33,3 +33,4 @@ webpack.generated.js
 .env.test
 .deploy-*.lock
 backups/
+local/*
