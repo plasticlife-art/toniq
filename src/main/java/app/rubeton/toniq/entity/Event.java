@@ -81,9 +81,6 @@ public class Event {
     @Column(name = "TIMEZONE_NAME", length = 255)
     private String timezoneName;
 
-    @Column(name = "MEGATIX_STATUS", length = 255)
-    private String megatixStatus;
-
     @Lob
     @Column(name = "RAW_PAYLOAD_JSON")
     private String rawPayloadJson;

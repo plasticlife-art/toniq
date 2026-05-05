@@ -12,12 +12,7 @@ public class StubMegatixClient implements MegatixClient {
     }
 
     @Override
-    public String fetchTicketTiers(final String eventId) {
-        throw new UnsupportedOperationException("Megatix integration is not implemented in Stage 1");
-    }
-
-    @Override
-    public String fetchAvailability(final String eventId) {
+    public String fetchEventPromoter(final String eventId) {
         throw new UnsupportedOperationException("Megatix integration is not implemented in Stage 1");
     }
 }

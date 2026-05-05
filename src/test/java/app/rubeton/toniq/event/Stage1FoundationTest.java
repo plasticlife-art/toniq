@@ -168,6 +168,15 @@ class Stage1FoundationTest {
     }
 
     @Test
+    void test_effectiveStatusFallsBackToActiveWhenNoOverrideExists() {
+        Organiser organiser = saveOrganiser(uniqueSuffix());
+        Event event = saveEvent(organiser, uniqueSuffix());
+        eventPublicationService.publish(event, true, "crypto_enabled", nowUtc());
+
+        assertThat(eventStatusService.resolveEffectiveStatus(event)).isEqualTo("active");
+    }
+
+    @Test
     void test_syncStateTierUpdatesAndSoftDeleteSemantics() {
         Organiser organiser = saveOrganiser(uniqueSuffix());
         Event event = saveEvent(organiser, uniqueSuffix());
@@ -235,7 +244,6 @@ class Stage1FoundationTest {
         event.setTitle("Event " + suffix);
         event.setDescription("Description " + suffix);
         event.setVenueName("Venue " + suffix);
-        event.setMegatixStatus("live");
         event.setRawPayloadJson("{\"event\":\"" + suffix + "\"}");
         event.setCreatedAt(nowUtc());
         event.setUpdatedAt(nowUtc());

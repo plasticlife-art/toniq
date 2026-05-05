@@ -52,7 +52,7 @@ public class EventStatusServiceImpl implements EventStatusService {
         return getActiveOverride(event)
                 .map(EventStatusOverride::getOverrideStatus)
                 .map(status -> status.name().toLowerCase(Locale.ROOT))
-                .orElse(event.getMegatixStatus());
+                .orElse("active");
     }
 
     @Transactional
