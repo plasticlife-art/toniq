@@ -2,6 +2,7 @@
 <menu-config xmlns="http://jmix.io/schema/flowui/menu">
 
     <menu id="application" title="msg://app.rubeton.toniq/menu.application.title" opened="true">
+        <item view="Event.list" title="msg://app.rubeton.toniq.view.event/EventListView.title"/>
         <item view="User.list" title="msg://app.rubeton.toniq.view.user/UserListView.title"/>
     </menu>
 

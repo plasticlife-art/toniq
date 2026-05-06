@@ -19,4 +19,7 @@ public interface EventSyncService {
 
     EventSyncLog recordSyncFailure(EventSyncLog syncLog, Event event, String errorCode, String errorMessage,
                                    String responsePayloadJson);
+
+    EventSyncLog recordSyncIgnored(EventSyncLog syncLog, Event event, String reasonCode, String reasonMessage,
+                                   String responsePayloadJson);
 }

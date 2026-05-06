@@ -7,6 +7,7 @@ import lombok.Getter;
 public enum SyncLogTriggerSource implements EnumClass<String> {
     WEBHOOK_ENABLE("webhook_enable"),
     WEBHOOK_DISABLE("webhook_disable"),
+    WEBHOOK_UNSUPPORTED("webhook_unsupported"),
     POLLING("polling"),
     MANUAL("manual");
 

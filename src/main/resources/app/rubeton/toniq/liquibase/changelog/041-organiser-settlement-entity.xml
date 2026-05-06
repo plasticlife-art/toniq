@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="41-1" author="toniq">
+        <createTable tableName="TONIQ_ORGANISER_SETTLEMENT">
+            <column name="ID" type="${uuid.type}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="VERSION" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ORGANISER_ID" type="${uuid.type}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ACCOUNT_NUMBER" type="varchar(255)"/>
+            <column name="ACCOUNT_BSB" type="varchar(255)"/>
+            <column name="ACCOUNT_NAME" type="varchar(500)"/>
+            <column name="COUNTRY_CODE" type="varchar(16)"/>
+            <column name="WALLET_ADDRESS" type="varchar(255)"/>
+            <column name="RAW_PAYLOAD_JSON" type="clob"/>
+            <column name="CREATED_AT" type="timestamp"/>
+            <column name="UPDATED_AT" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="TONIQ_ORGANISER_SETTLEMENT"
+                                 baseColumnNames="ORGANISER_ID"
+                                 constraintName="FK_TONIQ_ORG_SETTLEMENT_ON_ORGANISER"
+                                 referencedTableName="TONIQ_ORGANISER"
+                                 referencedColumnNames="ID"/>
+        <createIndex indexName="IDX_TONIQ_ORG_SETTLEMENT_ON_ORGANISER_ID"
+                     tableName="TONIQ_ORGANISER_SETTLEMENT" unique="true">
+            <column name="ORGANISER_ID"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

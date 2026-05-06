@@ -1,1 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        maven {
+            url = 'https://global.repo.jmix.io/repository/public'
+        }
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'io.jmix') {
+                useModule("io.jmix.gradle:jmix-gradle-plugin:${requested.version}")
+            }
+        }
+    }
+}
+
 rootProject.name = 'toniq'

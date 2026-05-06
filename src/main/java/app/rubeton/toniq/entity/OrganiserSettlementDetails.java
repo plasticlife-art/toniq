@@ -1,15 +1,14 @@
 package app.rubeton.toniq.entity;
 
 import io.jmix.core.entity.annotation.JmixGeneratedValue;
-import io.jmix.core.metamodel.annotation.InstanceName;
 import io.jmix.core.metamodel.annotation.JmixEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -17,18 +16,16 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @JmixEntity
 @Entity
-@Table(name = "TONIQ_ORGANISER", indexes = {
-        @Index(name = "IDX_TONIQ_ORGANISER_ON_MEGATIX_ORGANISER_ID", columnList = "MEGATIX_ORGANISER_ID", unique = true)
+@Table(name = "TONIQ_ORGANISER_SETTLEMENT", indexes = {
+        @Index(name = "IDX_TONIQ_ORG_SETTLEMENT_ON_ORGANISER_ID", columnList = "ORGANISER_ID", unique = true)
 })
 @Getter
 @Setter
-public class Organiser {
+public class OrganiserSettlementDetails {
 
     @Id
     @JmixGeneratedValue
@@ -39,15 +36,24 @@ public class Organiser {
     @Column(name = "VERSION", nullable = false)
     private Integer version;
 
-    @Column(name = "MEGATIX_ORGANISER_ID", nullable = false, length = 255)
-    private String megatixOrganiserId;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "ORGANISER_ID", nullable = false, unique = true)
+    private Organiser organiser;
 
-    @InstanceName
-    @Column(name = "NAME", length = 255)
-    private String name;
+    @Column(name = "ACCOUNT_NUMBER", length = 255)
+    private String accountNumber;
 
-    @Column(name = "EMAIL", length = 255)
-    private String email;
+    @Column(name = "ACCOUNT_BSB", length = 255)
+    private String accountBsb;
+
+    @Column(name = "ACCOUNT_NAME", length = 500)
+    private String accountName;
+
+    @Column(name = "COUNTRY_CODE", length = 16)
+    private String countryCode;
+
+    @Column(name = "WALLET_ADDRESS", length = 255)
+    private String walletAddress;
 
     @Lob
     @Column(name = "RAW_PAYLOAD_JSON")
@@ -58,11 +64,4 @@ public class Organiser {
 
     @Column(name = "UPDATED_AT")
     private OffsetDateTime updatedAt;
-
-    @OneToMany(mappedBy = "organiser", fetch = FetchType.LAZY)
-    private List<Event> events = new ArrayList<>();
-
-    @OneToOne(mappedBy = "organiser", fetch = FetchType.LAZY)
-    private OrganiserSettlementDetails settlementDetails;
-
 }

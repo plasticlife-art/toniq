@@ -8,7 +8,8 @@ public enum SyncLogScope implements EnumClass<String> {
     FULL_IMPORT("full_import"),
     EVENT_REFRESH("event_refresh"),
     AVAILABILITY_REFRESH("availability_refresh"),
-    UNPUBLISH("unpublish");
+    UNPUBLISH("unpublish"),
+    WEBHOOK_AUDIT("webhook_audit");
 
     private final String id;
 

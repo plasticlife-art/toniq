@@ -1,8 +1,11 @@
 package app.rubeton.toniq.service;
 
+import app.rubeton.toniq.service.megatix.model.MegatixEventDetailsResponse;
+import app.rubeton.toniq.service.megatix.model.MegatixPromoterResponse;
+
 public interface MegatixClient {
 
-    String fetchEventDetails(String eventId);
+    MegatixEventDetailsResponse fetchEventDetails(String eventId);
 
-    String fetchEventPromoter(String eventId);
+    MegatixPromoterResponse fetchEventPromoter(String eventId);
 }

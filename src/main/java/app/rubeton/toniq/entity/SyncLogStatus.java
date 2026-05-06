@@ -7,7 +7,8 @@ import lombok.Getter;
 public enum SyncLogStatus implements EnumClass<String> {
     STARTED("started"),
     SUCCESS("success"),
-    FAILURE("failure");
+    FAILURE("failure"),
+    IGNORED("ignored");
 
     private final String id;
 

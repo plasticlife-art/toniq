@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<view xmlns="http://jmix.io/schema/flowui/view"
+      title="msg://EventListView.title"
+      focusComponent="eventsDataGrid">
+    <data>
+        <collection id="eventsDc"
+                    class="app.rubeton.toniq.entity.Event">
+            <fetchPlan extends="_base">
+                <property name="organiser" fetchPlan="_base"/>
+            </fetchPlan>
+            <loader id="eventsDl" readOnly="true">
+                <query>
+                    <![CDATA[select e from Event e order by e.createdAt desc, e.title asc]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <actions>
+        <action id="selectAction" type="lookup_select"/>
+        <action id="discardAction" type="lookup_discard"/>
+    </actions>
+    <facets>
+        <dataLoadCoordinator auto="true"/>
+        <timer id="manualSyncTimer" delay="1000" autostart="false" repeating="true"/>
+        <urlQueryParameters>
+            <genericFilter component="genericFilter"/>
+            <pagination component="pagination"/>
+        </urlQueryParameters>
+    </facets>
+    <layout>
+        <genericFilter id="genericFilter"
+                       dataLoader="eventsDl">
+            <properties include=".*"/>
+        </genericFilter>
+        <hbox id="buttonsPanel" classNames="buttons-panel">
+            <startSlot>
+                <button id="importByIdButton" text="msg://app.rubeton.toniq.view.event/importByIdButton"/>
+                <button id="editButton" action="eventsDataGrid.editAction"/>
+                <button id="resyncButton" text="msg://app.rubeton.toniq.view.event/resyncButton"/>
+            </startSlot>
+            <endSlot>
+                <simplePagination id="pagination" dataLoader="eventsDl"/>
+            </endSlot>
+        </hbox>
+        <dataGrid id="eventsDataGrid"
+                  width="100%"
+                  minHeight="20em"
+                  columnReorderingAllowed="true"
+                  dataContainer="eventsDc">
+            <actions>
+                <action id="editAction" type="list_edit"/>
+            </actions>
+            <columns resizable="true">
+                <column property="title"/>
+                <column property="megatixEventId"/>
+                <column property="organiser.name"/>
+                <column property="venueName"/>
+                <column property="eventStartAt"/>
+                <column property="timezoneName"/>
+                <column property="deletedAt"/>
+            </columns>
+        </dataGrid>
+        <hbox id="lookupActions" visible="false">
+            <button id="selectButton" action="selectAction"/>
+            <button id="discardButton" action="discardAction"/>
+        </hbox>
+    </layout>
+</view>

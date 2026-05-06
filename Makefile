@@ -5,14 +5,21 @@ tag ?=
 sha ?=
 env ?= prod
 
-.PHONY: clean-cache run deploy stop start restart reload-env
+.PHONY: clean-cache run docker deploy stop start restart reload-env
 
 clean-cache:
 	@echo "Cleaning build and caches..."
 	rm -rf build .gradle .jmix/conf
 
 run:
-	./gradlew bootRun
+	@if [[ " $(MAKECMDGOALS) " == *" docker "* ]]; then \
+	  docker compose up --build; \
+	else \
+	  ./gradlew bootRun; \
+	fi
+
+docker:
+	@:
 
 deploy:
 	@set -euo pipefail; \

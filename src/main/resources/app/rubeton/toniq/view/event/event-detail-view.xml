@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<view xmlns="http://jmix.io/schema/flowui/view"
+      title="msg://EventDetailView.title"
+      focusComponent="form">
+    <data>
+        <instance id="eventDc"
+                  class="app.rubeton.toniq.entity.Event">
+            <fetchPlan extends="_base">
+                <property name="organiser" fetchPlan="_base"/>
+                <property name="ticketTiers">
+                    <property name="name"/>
+                    <property name="megatixTierId"/>
+                    <property name="currencyCode"/>
+                    <property name="facePrice"/>
+                    <property name="availabilityCount"/>
+                    <property name="availabilityState"/>
+                    <property name="salesStartsAt"/>
+                    <property name="salesEndsAt"/>
+                    <property name="displayOrder"/>
+                    <property name="isActive"/>
+                    <property name="lastAvailabilitySyncAt"/>
+                </property>
+            </fetchPlan>
+            <collection id="ticketTiersDc" property="ticketTiers"/>
+            <loader/>
+        </instance>
+    </data>
+    <actions>
+        <action id="closeAction" type="detail_close"/>
+    </actions>
+    <facets>
+        <dataLoadCoordinator auto="true"/>
+    </facets>
+    <layout>
+        <formLayout id="form" dataContainer="eventDc">
+            <textField id="titleField" property="title" readOnly="true"/>
+            <textField id="megatixEventIdField" property="megatixEventId" readOnly="true"/>
+            <textField id="organiserNameField" label="msg://app.rubeton.toniq.entity/Event.organiser" readOnly="true"/>
+            <textField id="slugField" property="slug" readOnly="true"/>
+            <textField id="venueNameField" property="venueName" readOnly="true"/>
+            <dateTimePicker id="eventStartAtField" property="eventStartAt" readOnly="true"/>
+            <dateTimePicker id="eventEndAtField" property="eventEndAt" readOnly="true"/>
+            <textField id="timezoneNameField" property="timezoneName" readOnly="true"/>
+            <div id="descriptionContainer" colspan="2" classNames="event-description-preview"/>
+            <div id="venueContainer" colspan="2" classNames="event-detail-card"/>
+            <div id="photosContainer" colspan="2" classNames="event-detail-card"/>
+            <vbox id="ticketTiersSection" colspan="2" classNames="event-detail-card">
+                <h4 id="ticketTiersTitle" text="msg://app.rubeton.toniq.view.event/ticketTiersSectionTitle"/>
+                <dataGrid id="ticketTiersDataGrid"
+                          width="100%"
+                          minHeight="16em"
+                          allRowsVisible="true"
+                          emptyStateText="msg://app.rubeton.toniq.view.event/noTicketTiers"
+                          dataContainer="ticketTiersDc">
+                    <columns resizable="true">
+                        <column property="name"/>
+                        <column property="megatixTierId"/>
+                        <column property="currencyCode"/>
+                        <column property="facePrice"/>
+                        <column property="availabilityCount"/>
+                        <column property="availabilityState"/>
+                        <column property="salesStartsAt"/>
+                        <column property="salesEndsAt"/>
+                        <column property="isActive"/>
+                        <column property="lastAvailabilitySyncAt"/>
+                    </columns>
+                </dataGrid>
+            </vbox>
+        </formLayout>
+        <hbox id="detailActions">
+            <button id="closeButton" action="closeAction"/>
+        </hbox>
+    </layout>
+</view>
