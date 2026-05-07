@@ -22,6 +22,7 @@ import app.rubeton.toniq.service.megatix.model.MegatixPromoterResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jmix.core.DataManager;
+import io.jmix.core.SaveContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -267,12 +270,10 @@ public class EventSyncServiceImpl implements EventSyncService {
                 .list();
         Map<String, EventTicketTier> existingByMegatixId = new HashMap<>();
         for (EventTicketTier tier : existingTiers) {
-            tier.setIsActive(false);
-            tier.setUpdatedAt(now);
-            dataManager.save(tier);
             existingByMegatixId.put(tier.getMegatixTierId(), tier);
         }
 
+        Set<String> seenMegatixTierIds = new HashSet<>();
         for (var ticket : eventResponse.payload().getTickets()) {
             ImportedTicketTierData tierData = megatixImportMapper.toImportedTicketTierData(ticket, serialize(ticket));
             if (tierData.getCurrencyCode() == null || tierData.getCurrencyCode().isBlank()) {
@@ -281,6 +282,8 @@ public class EventSyncServiceImpl implements EventSyncService {
             requireNonBlank(tierData.getMegatixTierId(), "Megatix tier ID is required");
             requireNonBlank(tierData.getName(), "Megatix tier name is required");
             requireNonBlank(tierData.getCurrencyCode(), "Megatix tier currency is required");
+
+            seenMegatixTierIds.add(tierData.getMegatixTierId());
 
             EventTicketTier tier = existingByMegatixId.getOrDefault(tierData.getMegatixTierId(),
                     dataManager.create(EventTicketTier.class));
@@ -302,8 +305,22 @@ public class EventSyncServiceImpl implements EventSyncService {
             tier.setLastAvailabilitySyncAt(now);
             tier.setRawPayloadJson(tierData.getRawPayloadJson());
             tier.setUpdatedAt(now);
-            dataManager.save(tier);
+            existingByMegatixId.put(tierData.getMegatixTierId(), tier);
         }
+
+        for (EventTicketTier tier : existingTiers) {
+            if (seenMegatixTierIds.contains(tier.getMegatixTierId())) {
+                continue;
+            }
+            tier.setIsActive(false);
+            tier.setUpdatedAt(now);
+        }
+
+        SaveContext saveContext = new SaveContext();
+        for (EventTicketTier tier : existingByMegatixId.values()) {
+            saveContext.saving(tier);
+        }
+        dataManager.save(saveContext);
     }
 
     private void requireNonBlank(final String value, final String message) {

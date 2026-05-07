@@ -228,6 +228,35 @@ class MegatixStage2IntegrationTest {
     }
 
     @Test
+    void repeatedManualImportOfSameEventUpdatesExistingTiersWithoutOptimisticLockFailure() {
+        enqueueHappyImport("evt-repeat", "Repeat Event", true);
+
+        ManualSyncHandle firstHandle = megatixSyncCoordinator.submitManualImport("evt-repeat");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(firstHandle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        enqueueJson(200, buildEventJson("Repeat Event Updated", true).replace("evt-1", "evt-repeat"));
+        enqueueJson(200, """
+                {"data":{"name":"Promoter A","description":null,"settlement_details":{"account_number":"1750000692680","account_bsb":"MANDIRI","account_name":"PT. Kharisma Anugrah Jawara Abadi","country_code":"ID","wallet_address":"0x123"}}}
+                """);
+        ManualSyncHandle secondHandle = megatixSyncCoordinator.submitManualImport("evt-repeat");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(secondHandle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        Event event = findEvent("evt-repeat");
+        List<EventTicketTier> tiers = loadTiers(event);
+
+        assertThat(event.getTitle()).isEqualTo("Repeat Event Updated");
+        assertThat(tiers).hasSize(2);
+        assertThat(tiers).allMatch(EventTicketTier::getIsActive);
+        assertThat(latestSyncLog("evt-repeat").getStatus()).isEqualTo(SyncLogStatus.SUCCESS);
+    }
+
+    @Test
     void webhookEnableImportsAndPublishesEvent() throws Exception {
         enqueueHappyImport("evt-webhook", "Webhook Event", true);
 
