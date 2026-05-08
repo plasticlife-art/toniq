@@ -189,7 +189,7 @@ function renderNotFound() {
   appRoot.className = "event-page event-page--not-found";
   appRoot.innerHTML = `
     <section class="empty-state">
-      <p class="eyebrow">Toniq Public App</p>
+      <p class="eyebrow">Toniq</p>
       <h1>Event not found</h1>
       <p>This page is unavailable because the event does not exist or is not publicly published.</p>
     </section>
@@ -200,7 +200,7 @@ function renderError() {
   appRoot.className = "event-page event-page--error";
   appRoot.innerHTML = `
     <section class="empty-state">
-      <p class="eyebrow">Toniq Public App</p>
+      <p class="eyebrow">Toniq</p>
       <h1>Unable to load event</h1>
       <p>Please try again later.</p>
     </section>
