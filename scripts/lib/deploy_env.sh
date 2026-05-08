@@ -31,7 +31,7 @@ validate_deploy_env() {
 }
 
 setup_stack_env() {
-  local default_env_file default_project default_app_port
+  local default_env_file default_project default_app_port default_frontend_port
   DEPLOY_ENV="${DEPLOY_ENV:-prod}"
   validate_deploy_env "$DEPLOY_ENV"
 
@@ -40,11 +40,13 @@ setup_stack_env() {
       default_env_file=".env.prod"
       default_project="toniq-prod"
       default_app_port="8080"
+      default_frontend_port="8081"
       ;;
     test)
       default_env_file=".env.test"
       default_project="toniq-test"
       default_app_port="18080"
+      default_frontend_port="18081"
       ;;
   esac
 
@@ -62,11 +64,16 @@ setup_stack_env() {
 
   COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$default_project}"
   APP_SERVICE="${APP_SERVICE:-app}"
+  FRONTEND_SERVICE="${FRONTEND_SERVICE:-frontend}"
   DB_SERVICE="${DB_SERVICE:-db}"
   APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq}"
   APP_IMAGE_TAG="${APP_IMAGE_TAG:-latest}"
+  FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-frontend}"
+  FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG:-$APP_IMAGE_TAG}"
   APP_PORT="${APP_PORT:-$default_app_port}"
-  HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/login}"
+  FRONTEND_PORT="${FRONTEND_PORT:-$default_frontend_port}"
+  BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/login}}"
+  FRONTEND_HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:${FRONTEND_PORT}/}"
   LOCK_FILE="${LOCK_FILE:-$APP_DIR/.deploy-${DEPLOY_ENV}.lock}"
   BACKUP_ROOT_DIR="${BACKUP_ROOT_DIR:-$APP_DIR/backups/${DEPLOY_ENV}}"
 
@@ -82,6 +89,10 @@ setup_stack_env() {
 
 compose_app_container_id() {
   "${COMPOSE[@]}" ps -q "$APP_SERVICE" | head -n1
+}
+
+compose_frontend_container_id() {
+  "${COMPOSE[@]}" ps -q "$FRONTEND_SERVICE" | head -n1
 }
 
 compose_service_container_id() {

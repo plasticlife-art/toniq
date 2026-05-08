@@ -1,33 +1,26 @@
 # Toniq
 
-This is a web application based on the [Jmix](https://www.jmix.io) framework.
+Toniq is a web application for event operations and public event presentation.
 
 ## Getting Started
 
-The newly created project requires Java 17 or 21 and uses the embedded HSQL database.
-
-Use the following resources to learn more about Jmix:
-* [Jmix Documentation](https://docs.jmix.io)
-* [Online Demo Applications](https://www.jmix.io/live-demo)
-* [Jmix AI Assistant](https://ai-assistant.jmix.io) (also available in the **Jmix AI** tool window of IntelliJ IDEA)
+Requirements:
+* Java 17 or 21
+* Docker, if you want to run the containerized stack
 
 ## Development
 
-- [Setup](https://docs.jmix.io/jmix/setup.html) your development environment.
-- [Open](https://docs.jmix.io/jmix/studio/project.html#opening-existing-project) the project in the IDE.
-- If you want to use AI agents to develop the application, check out the [Jmix AI Agent Guidelines](https://github.com/jmix-framework/jmix-agent-guidelines) repository.
-
-## Running
-
-To start the application, use the **Toniq Jmix Application** run configuration in your IDE, or run the following command in the project root directory:
+For local development, run the backend directly:
 
 ```bash
 ./gradlew bootRun
 ```
 
-The application will be available at <http://localhost:8080>.
+## Running
 
-The default user credentials are:
+The backend application will be available at <http://localhost:8080>.
+
+Default admin credentials:
 * Login: `admin`
 * Password: `admin`
 
@@ -41,13 +34,20 @@ docker compose up --build
 
 By default, the stack starts:
 * PostgreSQL on `localhost:5432`
-* Application on <http://localhost:8080>
+* Backend/admin application on <http://localhost:8080>
+* Public frontend on <http://localhost:8081>
 
-You can override ports and database credentials with environment variables such as `APP_PORT`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+You can override ports and database credentials with variables such as `APP_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+
+The public event-detail app is built and deployed separately from the backend:
+* backend image: Spring/Jmix admin UI + public API
+* frontend image: static public app served by Nginx
+
+In the default Docker setup, the frontend proxies `/api/*` to the backend over Docker network/DNS, so the browser stays on one origin and no CORS configuration is required.
 
 ## Deploy
 
-The repository now includes the same basic operational layout as `bots/lottery`:
+The repository includes the basic operational files for containerized deployment and runtime control:
 * `Makefile`
 * `scripts/deploy_release.sh`
 * `scripts/rollout_release.sh`

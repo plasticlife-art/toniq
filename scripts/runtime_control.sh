@@ -43,15 +43,16 @@ setup_stack_env
 
 case "$COMMAND" in
   stop)
-    "${COMPOSE[@]}" stop "$APP_SERVICE"
+    "${COMPOSE[@]}" stop "$FRONTEND_SERVICE" "$APP_SERVICE"
     ;;
   start)
-    "${COMPOSE[@]}" start "$APP_SERVICE"
+    "${COMPOSE[@]}" start "$APP_SERVICE" "$FRONTEND_SERVICE"
     ;;
   restart)
-    "${COMPOSE[@]}" restart "$APP_SERVICE"
+    "${COMPOSE[@]}" restart "$APP_SERVICE" "$FRONTEND_SERVICE"
     ;;
   reload-env)
     "${COMPOSE[@]}" up -d --no-deps --force-recreate "$APP_SERVICE"
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate "$FRONTEND_SERVICE"
     ;;
 esac

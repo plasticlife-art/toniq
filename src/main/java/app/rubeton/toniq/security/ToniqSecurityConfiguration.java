@@ -39,11 +39,11 @@ public class ToniqSecurityConfiguration {
     @Bean
     @Order(JmixSecurityFilterChainOrder.CUSTOM)
     SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/public/**", "/api/megatix/**")
+        http.securityMatcher("/api/megatix/**", "/api/public/**")
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().permitAll()
                 )
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/megatix/**"));
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/megatix/**", "/api/public/**"));
 
         return http.build();
     }

@@ -19,6 +19,7 @@ services:
   app:
     build:
       context: .
+      dockerfile: Dockerfile
     image: ${APP_IMAGE_REPOSITORY:-toniq}:${APP_IMAGE_TAG:-local}
     depends_on:
       db:
@@ -37,6 +38,25 @@ services:
       VAADIN_LAUNCH_BROWSER: "false"
     ports:
       - "${APP_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: ${FRONTEND_IMAGE_REPOSITORY:-toniq-frontend}:${FRONTEND_IMAGE_TAG:-local}
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-/api/public}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
     restart: unless-stopped
 
 volumes:

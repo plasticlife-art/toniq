@@ -52,6 +52,8 @@ wait_for_service_healthy "$DB_SERVICE"
 
 log "Stopping application"
 "${COMPOSE[@]}" stop "$APP_SERVICE" || true
+log "Stopping frontend"
+"${COMPOSE[@]}" stop "$FRONTEND_SERVICE" || true
 
 log "Recreating database $POSTGRES_DB"
 "${COMPOSE[@]}" exec -T "$DB_SERVICE" dropdb -U "$POSTGRES_USER" --if-exists --force "$POSTGRES_DB"
@@ -62,3 +64,5 @@ cat "$BACKUP_ARG" | "${COMPOSE[@]}" exec -T "$DB_SERVICE" pg_restore -U "$POSTGR
 
 log "Starting application"
 "${COMPOSE[@]}" up -d "$APP_SERVICE"
+log "Starting frontend"
+"${COMPOSE[@]}" up -d "$FRONTEND_SERVICE"

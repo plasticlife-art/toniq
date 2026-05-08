@@ -74,20 +74,22 @@ update_repo_for_deploy() {
 }
 
 post_rollout_check() {
+  local service_name="$1"
+  local health_url="$2"
   local attempt response body code
   for attempt in $(seq 1 "$HEALTH_RETRIES"); do
-    response="$(curl -sS -m 10 -w $'\n%{http_code}' "$HEALTH_URL" 2>&1 || true)"
+    response="$(curl -sS -m 10 -w $'\n%{http_code}' "$health_url" 2>&1 || true)"
     body="${response%$'\n'*}"
     code="${response##*$'\n'}"
     if [[ "$code" == "200" ]]; then
-      log "Health check passed: $HEALTH_URL"
+      log "Health check passed for $service_name: $health_url"
       return 0
     fi
     sleep "$HEALTH_SLEEP_SEC"
   done
 
   echo "$body" >&2
-  fail "Health check failed: $HEALTH_URL"
+  fail "Health check failed for $service_name: $health_url"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -134,7 +136,9 @@ prompt_continue
 update_repo_for_deploy
 
 log "Deploy plan: env=$DEPLOY_ENV git_ref=$TARGET_GIT_REF image_tag=$APP_IMAGE_TAG"
-APP_GIT_REF="$TARGET_GIT_REF" APP_IMAGE_TAG="$APP_IMAGE_TAG" APP_IMAGE_REPOSITORY="$APP_IMAGE_REPOSITORY" \
+APP_GIT_REF="$TARGET_GIT_REF" APP_IMAGE_TAG="$APP_IMAGE_TAG" FRONTEND_IMAGE_TAG="$APP_IMAGE_TAG" \
+APP_IMAGE_REPOSITORY="$APP_IMAGE_REPOSITORY" FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-frontend}" \
   "$APP_DIR/scripts/rollout_release.sh" --env "$DEPLOY_ENV"
 
-post_rollout_check
+post_rollout_check "backend" "$BACKEND_HEALTH_URL"
+post_rollout_check "frontend" "$FRONTEND_HEALTH_URL"
