@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2F1915"/>
+      <stop offset="1" stop-color="#150A09"/>
+    </linearGradient>
+    <linearGradient id="ticket" x1="12" y1="22" x2="47" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4B35A"/>
+      <stop offset="1" stop-color="#D06D2D"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="40" y1="12" x2="56" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6EF0D7"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <path
+    d="M17 20H42C44.7614 20 47 22.2386 47 25V28.25C44.0893 29.0833 42 31.7689 42 35C42 38.2311 44.0893 40.9167 47 41.75V45C47 47.7614 44.7614 50 42 50H17C14.2386 50 12 47.7614 12 45V41.75C14.9107 40.9167 17 38.2311 17 35C17 31.7689 14.9107 29.0833 12 28.25V25C12 22.2386 14.2386 20 17 20Z"
+    fill="url(#ticket)"
+  />
+  <path d="M25 27.5V42.5" stroke="#2D1713" stroke-linecap="round" stroke-width="3.5"/>
+  <path d="M31 27.5H38.5" stroke="#2D1713" stroke-linecap="round" stroke-width="3.5"/>
+  <circle cx="47.5" cy="18.5" r="8.5" fill="url(#coin)"/>
+  <path
+    d="M47.5 13.5L50.9 16.9L47.5 20.3L44.1 16.9L47.5 13.5ZM47.5 17.7L49.7 19.9L47.5 22.1L45.3 19.9L47.5 17.7Z"
+    fill="#EFFFFB"
+  />
+</svg>
