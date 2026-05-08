@@ -1,9 +1,9 @@
 package app.rubeton.toniq.service.impl;
 
 import app.rubeton.toniq.entity.Event;
-import app.rubeton.toniq.entity.EventPublicationSettings;
 import app.rubeton.toniq.entity.EventStatusOverride;
 import app.rubeton.toniq.entity.OverrideStatus;
+import app.rubeton.toniq.service.EventPublicationService;
 import app.rubeton.toniq.service.EventStatusService;
 import io.jmix.core.DataManager;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +22,7 @@ import java.util.Optional;
 public class EventStatusServiceImpl implements EventStatusService {
 
     private final DataManager dataManager;
+    private final EventPublicationService eventPublicationService;
 
     @Override
     public Optional<EventStatusOverride> getActiveOverride(final Event event) {
@@ -34,14 +35,7 @@ public class EventStatusServiceImpl implements EventStatusService {
     @Override
     public boolean isPubliclyVisible(final Event event) {
         Objects.requireNonNull(event, "event must not be null");
-        if (event.getDeletedAt() != null) {
-            return false;
-        }
-        EventPublicationSettings settings = dataManager.load(EventPublicationSettings.class)
-                .query("e.event = ?1", event)
-                .optional()
-                .orElse(null);
-        return settings != null && Boolean.TRUE.equals(settings.getPublished());
+        return eventPublicationService.getDecision(event).effectivePublished();
     }
 
     @Override

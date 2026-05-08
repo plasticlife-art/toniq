@@ -1,6 +1,8 @@
 package app.rubeton.toniq.service.megatix.impl;
 
 import app.rubeton.toniq.entity.Event;
+import app.rubeton.toniq.entity.EventPublicationSettings;
+import app.rubeton.toniq.entity.PublicationMode;
 import app.rubeton.toniq.entity.EventSyncLog;
 import app.rubeton.toniq.entity.SyncLogScope;
 import app.rubeton.toniq.entity.SyncLogTriggerSource;
@@ -40,7 +42,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
         megatixSyncTaskExecutor.execute(() -> systemAuthenticator.runWithSystem(() -> {
             if (Boolean.TRUE.equals(command.getCryptoEnabled())) {
                 runImportFlow(command.getMegatixEventId(), SyncLogTriggerSource.WEBHOOK_ENABLE,
-                        SyncLogScope.FULL_IMPORT, command.getRawPayloadJson(), true);
+                        SyncLogScope.FULL_IMPORT, command.getRawPayloadJson(), Boolean.TRUE);
                 return;
             }
             runDisableFlow(command.getMegatixEventId(), command.getRawPayloadJson());
@@ -54,7 +56,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
                 eventId, existingEvent, SyncLogTriggerSource.MANUAL, SyncLogScope.FULL_IMPORT,
                 "{\"source\":\"manual_import\"}"));
         megatixSyncTaskExecutor.execute(() -> systemAuthenticator.runWithSystem(() ->
-                runImportFlow(syncLog.getId(), eventId, existingEvent, false)));
+                runImportFlow(syncLog.getId(), eventId, existingEvent, null)));
         return new ManualSyncHandle(syncLog.getId());
     }
 
@@ -65,7 +67,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
                 eventId, existingEvent, SyncLogTriggerSource.MANUAL, SyncLogScope.EVENT_REFRESH,
                 "{\"source\":\"manual_resync\"}"));
         megatixSyncTaskExecutor.execute(() -> systemAuthenticator.runWithSystem(() ->
-                runImportFlow(syncLog.getId(), eventId, existingEvent, false)));
+                runImportFlow(syncLog.getId(), eventId, existingEvent, null)));
         return new ManualSyncHandle(syncLog.getId());
     }
 
@@ -85,7 +87,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
 
     private void runImportFlow(final String eventId, final SyncLogTriggerSource triggerSource,
                                final SyncLogScope syncScope, final String requestPayloadJson,
-                               final boolean publishAfterImport) {
+                               final Boolean webhookEnabled) {
         EventLockEntry lockEntry = acquireEventLockEntry(eventId);
         ReentrantLock lock = lockEntry.lock();
         Event existingEvent = findEvent(eventId);
@@ -99,9 +101,11 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
 
         try {
             Event importedEvent = eventSyncService.importEvent(eventId);
-            if (publishAfterImport) {
-                eventPublicationService.publish(importedEvent, true, "crypto_enabled", nowUtc());
+            if (webhookEnabled != null) {
+                eventPublicationService.recordMegatixWebhookState(importedEvent, webhookEnabled,
+                        webhookEnabled ? "megatix_webhook_enabled" : "megatix_webhook_disabled", nowUtc());
             }
+            eventPublicationService.reconcile(importedEvent, nowUtc());
             eventSyncService.recordSyncSuccess(syncLog, importedEvent, "{\"outcome\":\"imported\"}");
         } catch (RuntimeException e) {
             log.error("Megatix import failed for event {}", eventId, e);
@@ -115,7 +119,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
     }
 
     private void runImportFlow(final java.util.UUID syncLogId, final String eventId,
-                               final Event existingEvent, final boolean publishAfterImport) {
+                               final Event existingEvent, final Boolean webhookEnabled) {
         EventLockEntry lockEntry = acquireEventLockEntry(eventId);
         ReentrantLock lock = lockEntry.lock();
         EventSyncLog syncLog = dataManager.load(EventSyncLog.class).id(syncLogId).one();
@@ -128,9 +132,11 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
 
         try {
             Event importedEvent = eventSyncService.importEvent(eventId);
-            if (publishAfterImport) {
-                eventPublicationService.publish(importedEvent, true, "crypto_enabled", nowUtc());
+            if (webhookEnabled != null) {
+                eventPublicationService.recordMegatixWebhookState(importedEvent, webhookEnabled,
+                        webhookEnabled ? "megatix_webhook_enabled" : "megatix_webhook_disabled", nowUtc());
             }
+            eventPublicationService.reconcile(importedEvent, nowUtc());
             eventSyncService.recordSyncSuccess(syncLog, importedEvent, "{\"outcome\":\"imported\"}");
         } catch (RuntimeException e) {
             log.error("Megatix import failed for event {}", eventId, e);
@@ -158,7 +164,8 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
 
         try {
             if (existingEvent != null) {
-                eventPublicationService.unpublish(existingEvent, false, "crypto_disabled", nowUtc());
+                eventPublicationService.recordMegatixWebhookState(existingEvent, false, "megatix_webhook_disabled", nowUtc());
+                eventPublicationService.reconcile(existingEvent, nowUtc());
             }
             eventSyncService.recordSyncSuccess(syncLog, existingEvent, "{\"outcome\":\"unpublished\"}");
         } catch (RuntimeException e) {

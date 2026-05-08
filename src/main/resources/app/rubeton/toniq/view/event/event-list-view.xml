@@ -7,6 +7,7 @@
                     class="app.rubeton.toniq.entity.Event">
             <fetchPlan extends="_base">
                 <property name="organiser" fetchPlan="_base"/>
+                <property name="publicationSettings" fetchPlan="_base"/>
             </fetchPlan>
             <loader id="eventsDl" readOnly="true">
                 <query>
@@ -57,6 +58,8 @@
                 <column property="venueName"/>
                 <column property="eventStartAt"/>
                 <column property="timezoneName"/>
+                <column property="publicationSettings.publicationMode"/>
+                <column property="publicationSettings.publicationState"/>
                 <column property="deletedAt"/>
             </columns>
         </dataGrid>

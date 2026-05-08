@@ -8,6 +8,7 @@ import app.rubeton.toniq.entity.EventSyncState;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.Organiser;
 import app.rubeton.toniq.entity.OverrideStatus;
+import app.rubeton.toniq.entity.PublicationMode;
 import app.rubeton.toniq.entity.PublicationState;
 import app.rubeton.toniq.entity.SyncLogScope;
 import app.rubeton.toniq.entity.SyncLogStatus;
@@ -102,6 +103,9 @@ class Stage1FoundationTest {
                 null, null, "ops override", "admin");
 
         assertThat(publicationSettings.getEvent().getId()).isEqualTo(event.getId());
+        assertThat(publicationSettings.getPublicationMode()).isEqualTo(PublicationMode.AUTO);
+        assertThat(publicationSettings.getLastMegatixWebhookEnabled()).isNull();
+        assertThat(publicationSettings.getLastMegatixWebhookAt()).isNull();
         assertThat(syncState.getEvent().getId()).isEqualTo(event.getId());
         assertThat(tier.getEvent().getId()).isEqualTo(event.getId());
         assertThat(syncLog.getEvent().getId()).isEqualTo(event.getId());
@@ -149,7 +153,7 @@ class Stage1FoundationTest {
         assertThat(eventStatusService.isPubliclyVisible(event)).isFalse();
         assertThat(eventStatusService.resolveEffectiveStatus(event)).isEqualTo("unavailable");
 
-        eventPublicationService.publish(event, true, "crypto_enabled", nowUtc());
+        eventPublicationService.recordMegatixWebhookState(event, true, "megatix_webhook_enabled", nowUtc());
         EventStatusOverride firstOverride = eventStatusService.applyOverride(event, OverrideStatus.RESCHEDULED,
                 OffsetDateTime.parse("2026-05-06T10:15:30Z"), OffsetDateTime.parse("2026-05-06T12:15:30Z"), "new slot", "admin");
         assertThat(eventStatusService.resolveEffectiveStatus(event)).isEqualTo("rescheduled");
@@ -171,9 +175,60 @@ class Stage1FoundationTest {
     void test_effectiveStatusFallsBackToActiveWhenNoOverrideExists() {
         Organiser organiser = saveOrganiser(uniqueSuffix());
         Event event = saveEvent(organiser, uniqueSuffix());
-        eventPublicationService.publish(event, true, "crypto_enabled", nowUtc());
+        eventPublicationService.recordMegatixWebhookState(event, true, "megatix_webhook_enabled", nowUtc());
 
         assertThat(eventStatusService.resolveEffectiveStatus(event)).isEqualTo("active");
+    }
+
+    @Test
+    void test_publicationDecisionMatrixAcrossModes() {
+        Organiser organiser = saveOrganiser(uniqueSuffix());
+        Event autoEvent = saveEvent(organiser, uniqueSuffix());
+
+        EventPublicationSettings autoInitial = eventPublicationService.ensurePublicationSettings(autoEvent);
+        assertThat(autoInitial.getPublicationMode()).isEqualTo(PublicationMode.AUTO);
+        assertThat(autoInitial.getLastMegatixWebhookEnabled()).isNull();
+        EventPublicationSettings autoWithoutWebhook = eventPublicationService.reconcile(autoEvent, nowUtc());
+        assertThat(autoWithoutWebhook.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+        assertThat(eventPublicationService.getDecision(autoEvent).effectivePublished()).isFalse();
+        assertThat(eventPublicationService.getDecision(autoEvent).blockedReason()).isEqualTo("No Megatix enable webhook yet");
+
+        EventPublicationSettings autoPublished = eventPublicationService.recordMegatixWebhookState(
+                autoEvent, true, "megatix_webhook_enabled", nowUtc());
+        assertThat(autoPublished.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
+        assertThat(autoPublished.getLastMegatixWebhookEnabled()).isTrue();
+
+        autoEvent.setRawPayloadJson(null);
+        autoEvent.setUpdatedAt(nowUtc());
+        autoEvent = dataManager.save(autoEvent);
+        EventPublicationSettings autoReconciled = eventPublicationService.reconcile(autoEvent, nowUtc());
+        assertThat(autoReconciled.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+        assertThat(eventPublicationService.getDecision(autoEvent).blockedReason()).isEqualTo("Missing SROAST projection");
+
+        Event onEvent = saveEvent(organiser, uniqueSuffix());
+        EventPublicationSettings onSettings = eventPublicationService.setPublicationMode(onEvent, PublicationMode.ON,
+                "admin_mode_on", nowUtc());
+        assertThat(onSettings.getCryptoEnabled()).isTrue();
+        assertThat(onSettings.getPublished()).isTrue();
+        assertThat(onSettings.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
+
+        onEvent.setDeletedAt(nowUtc());
+        onEvent.setDeletedBy("ops");
+        onEvent.setUpdatedAt(nowUtc());
+        onEvent = dataManager.save(onEvent);
+        EventPublicationSettings onReconciled = eventPublicationService.reconcile(onEvent, nowUtc());
+        assertThat(onReconciled.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+        assertThat(eventPublicationService.getDecision(onEvent).blockedReason()).isEqualTo("Event soft-deleted");
+
+        Event offEvent = saveEvent(organiser, uniqueSuffix());
+        EventPublicationSettings offSettings = eventPublicationService.recordMegatixWebhookState(
+                offEvent, true, "megatix_webhook_enabled", nowUtc());
+        assertThat(offSettings.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
+        EventPublicationSettings forcedOff = eventPublicationService.setPublicationMode(offEvent, PublicationMode.OFF,
+                "admin_mode_off", nowUtc());
+        assertThat(forcedOff.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+        assertThat(forcedOff.getPublished()).isTrue();
+        assertThat(eventPublicationService.getDecision(offEvent).blockedReason()).isEqualTo("Disabled in admin");
     }
 
     @Test

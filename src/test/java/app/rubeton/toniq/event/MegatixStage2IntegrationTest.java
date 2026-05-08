@@ -2,6 +2,7 @@ package app.rubeton.toniq.event;
 
 import app.rubeton.toniq.entity.Event;
 import app.rubeton.toniq.entity.EventPublicationSettings;
+import app.rubeton.toniq.entity.PublicationMode;
 import app.rubeton.toniq.entity.EventSyncLog;
 import app.rubeton.toniq.entity.EventSyncState;
 import app.rubeton.toniq.entity.EventTicketTier;
@@ -13,6 +14,7 @@ import app.rubeton.toniq.entity.SyncLogScope;
 import app.rubeton.toniq.entity.SyncLogTriggerSource;
 import app.rubeton.toniq.entity.SyncResult;
 import app.rubeton.toniq.service.MegatixClient;
+import app.rubeton.toniq.service.EventPublicationService;
 import app.rubeton.toniq.service.megatix.ManualSyncStatusService;
 import app.rubeton.toniq.service.megatix.MegatixAuthService;
 import app.rubeton.toniq.service.megatix.MegatixSyncCoordinator;
@@ -44,6 +46,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -76,6 +79,9 @@ class MegatixStage2IntegrationTest {
 
     @Autowired
     MegatixClient megatixClient;
+
+    @Autowired
+    EventPublicationService eventPublicationService;
 
     @Autowired
     MegatixAuthService megatixAuthService;
@@ -216,9 +222,10 @@ class MegatixStage2IntegrationTest {
         assertThat(settlementDetails.getWalletAddress()).isEqualTo("0x123");
         assertThat(settlementDetails.getRawPayloadJson()).contains("\"walletAddress\":\"0x123\"");
         assertThat(settlementDetails.getRawPayloadJson()).contains("\"accountNumber\":\"1750000692680\"");
+        assertThat(publication.getLastMegatixWebhookEnabled()).isNull();
         assertThat(publication.getCryptoEnabled()).isFalse();
         assertThat(publication.getPublished()).isFalse();
-        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.DRAFT);
+        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
         assertThat(syncState.getLastSyncResult()).isEqualTo(SyncResult.SUCCESS);
         assertThat(syncState.getLastEventDataSyncAt()).isNotNull();
         assertThat(syncState.getLastAvailabilitySyncAt()).isNotNull();
@@ -276,11 +283,192 @@ class MegatixStage2IntegrationTest {
         EventPublicationSettings publication = loadPublication(event);
         EventSyncLog syncLog = latestSyncLog("evt-webhook");
 
+        assertThat(publication.getLastMegatixWebhookEnabled()).isTrue();
+        assertThat(publication.getLastMegatixWebhookAt()).isNotNull();
         assertThat(publication.getCryptoEnabled()).isTrue();
         assertThat(publication.getPublished()).isTrue();
         assertThat(publication.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
         assertThat(syncLog.getTriggerSource()).isEqualTo(SyncLogTriggerSource.WEBHOOK_ENABLE);
         assertThat(syncLog.getStatus()).isEqualTo(SyncLogStatus.SUCCESS);
+    }
+
+    @Test
+    void webhookDisableKeepsPublishedEventWhenModeIsOn() throws Exception {
+        enqueueHappyImport("evt-mode-on", "Mode On Event", true);
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-mode-on","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-mode-on");
+            return log != null && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        Event event = findEvent("evt-mode-on");
+        systemAuthenticator.runWithSystem(() ->
+                eventPublicationService.setPublicationMode(event, PublicationMode.ON, "admin_mode_on", nowUtc()));
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-mode-on","enabled":false}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-mode-on");
+            return log != null
+                    && log.getTriggerSource() == SyncLogTriggerSource.WEBHOOK_DISABLE
+                    && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        EventPublicationSettings publication = loadPublication(findEvent("evt-mode-on"));
+        assertThat(publication.getPublicationMode()).isEqualTo(PublicationMode.ON);
+        assertThat(publication.getLastMegatixWebhookEnabled()).isFalse();
+        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
+        assertThat(publication.getPublished()).isTrue();
+        assertThat(publication.getCryptoEnabled()).isTrue();
+    }
+
+    @Test
+    void webhookEnableKeepsEventUnpublishedWhenModeIsOff() throws Exception {
+        enqueueHappyImport("evt-mode-off", "Mode Off Event", true);
+        ManualSyncHandle handle = megatixSyncCoordinator.submitManualImport("evt-mode-off");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(handle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        Event event = findEvent("evt-mode-off");
+        systemAuthenticator.runWithSystem(() ->
+                eventPublicationService.setPublicationMode(event, PublicationMode.OFF, "admin_mode_off", nowUtc()));
+
+        megatixAuthService.evictAccessToken();
+        enqueueHappyImport("evt-mode-off", "Mode Off Event", true);
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-mode-off","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-mode-off");
+            return log != null
+                    && log.getTriggerSource() == SyncLogTriggerSource.WEBHOOK_ENABLE
+                    && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        EventPublicationSettings publication = loadPublication(findEvent("evt-mode-off"));
+        assertThat(publication.getPublicationMode()).isEqualTo(PublicationMode.OFF);
+        assertThat(publication.getLastMegatixWebhookEnabled()).isTrue();
+        assertThat(publication.getPublished()).isTrue();
+        assertThat(publication.getCryptoEnabled()).isTrue();
+        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+    }
+
+    @Test
+    void onModeRepublishesWhenSroastProjectionReturns() {
+        enqueueHappyImport("evt-sroast-return", "Sroast Return Event", true);
+        ManualSyncHandle importHandle = megatixSyncCoordinator.submitManualImport("evt-sroast-return");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(importHandle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        Event event = findEvent("evt-sroast-return");
+        systemAuthenticator.runWithSystem(() ->
+                eventPublicationService.setPublicationMode(event, PublicationMode.ON, "admin_mode_on", nowUtc()));
+
+        systemAuthenticator.runWithSystem(() -> {
+            Event managedEvent = dataManager.load(Event.class).id(event.getId()).one();
+            managedEvent.setRawPayloadJson(null);
+            managedEvent.setUpdatedAt(nowUtc());
+            dataManager.save(managedEvent);
+
+            EventSyncState syncState = loadSyncState(managedEvent);
+            syncState.setLastEventDataSyncAt(null);
+            syncState.setUpdatedAt(nowUtc());
+            dataManager.save(syncState);
+
+            eventPublicationService.reconcile(managedEvent, nowUtc());
+        });
+
+        EventPublicationSettings missingProjectionPublication = loadPublication(findEvent("evt-sroast-return"));
+        assertThat(missingProjectionPublication.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+
+        megatixAuthService.evictAccessToken();
+        enqueueHappyImport("evt-sroast-return", "Sroast Return Event", true);
+        ManualSyncHandle resyncHandle = megatixSyncCoordinator.submitManualResync("evt-sroast-return");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(resyncHandle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        EventPublicationSettings restoredPublication = loadPublication(findEvent("evt-sroast-return"));
+        assertThat(restoredPublication.getPublicationMode()).isEqualTo(PublicationMode.ON);
+        assertThat(restoredPublication.getPublicationState()).isEqualTo(PublicationState.PUBLISHED);
+    }
+
+    @Test
+    void autoModeStaysUnavailableAfterManualImportUntilEnableWebhookArrives() throws Exception {
+        enqueueHappyImport("evt-auto-no-webhook", "Auto No Webhook Event", true);
+
+        ManualSyncHandle handle = megatixSyncCoordinator.submitManualImport("evt-auto-no-webhook");
+        waitUntilNotNull(() -> {
+            ManualSyncStatus status = manualSyncStatusService.getStatus(handle.getSyncLogId());
+            return status.getStatus() == SyncLogStatus.SUCCESS ? status : null;
+        });
+
+        EventPublicationSettings publication = loadPublication(findEvent("evt-auto-no-webhook"));
+        assertThat(publication.getPublicationMode()).isEqualTo(PublicationMode.AUTO);
+        assertThat(publication.getLastMegatixWebhookEnabled()).isNull();
+        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
+    }
+
+    @Test
+    void autoModeUnpublishesAfterDisableWebhook() throws Exception {
+        enqueueHappyImport("evt-auto-disable", "Auto Disable Event", true);
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-auto-disable","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-auto-disable");
+            return log != null && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-auto-disable","enabled":false}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-auto-disable");
+            return log != null
+                    && log.getTriggerSource() == SyncLogTriggerSource.WEBHOOK_DISABLE
+                    && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        EventPublicationSettings publication = loadPublication(findEvent("evt-auto-disable"));
+        assertThat(publication.getPublicationMode()).isEqualTo(PublicationMode.AUTO);
+        assertThat(publication.getLastMegatixWebhookEnabled()).isFalse();
+        assertThat(publication.getPublicationState()).isEqualTo(PublicationState.UNPUBLISHED);
     }
 
     @Test
@@ -672,5 +860,9 @@ class MegatixStage2IntegrationTest {
 
     private int currentLockCount() {
         return (Integer) ReflectionTestUtils.invokeMethod(megatixSyncCoordinatorImpl, "activeEventLockCount");
+    }
+
+    private OffsetDateTime nowUtc() {
+        return OffsetDateTime.now(ZoneOffset.UTC);
     }
 }

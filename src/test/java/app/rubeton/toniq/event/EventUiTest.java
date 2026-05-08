@@ -2,12 +2,16 @@ package app.rubeton.toniq.event;
 
 import app.rubeton.toniq.ToniqApplication;
 import app.rubeton.toniq.entity.Event;
+import app.rubeton.toniq.entity.EventPublicationSettings;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.Organiser;
+import app.rubeton.toniq.entity.PublicationMode;
 import app.rubeton.toniq.entity.TierAvailabilityState;
 import app.rubeton.toniq.view.event.EventDetailView;
 import app.rubeton.toniq.view.event.EventListView;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import io.jmix.core.DataManager;
 import io.jmix.flowui.ViewNavigators;
 import io.jmix.flowui.component.grid.DataGrid;
@@ -133,10 +137,45 @@ class EventUiTest {
         assertThat(badLink.hasAttr("rel")).isFalse();
     }
 
+    @Test
+    void test_eventDetailShowsPublicationControlsAndPersistsMode() {
+        String suffix = uniqueSuffix();
+        Organiser organiser = saveOrganiser(suffix);
+        Event event = saveEvent(organiser, suffix);
+
+        EventDetailView detailView = openEventDetail(event);
+        Div publicationControlContainer = UiTestUtils.getComponent(detailView, "publicationControlContainer");
+        @SuppressWarnings("unchecked")
+        RadioButtonGroup<PublicationMode> modeGroup = (RadioButtonGroup<PublicationMode>) publicationControlContainer.getChildren()
+                .filter(component -> component instanceof RadioButtonGroup<?>)
+                .findFirst()
+                .orElseThrow();
+        Button applyButton = UiTestUtils.getComponent(detailView, "applyPublicationModeButton");
+
+        assertThat(modeGroup.getValue()).isEqualTo(PublicationMode.AUTO);
+        assertThat(publicationControlContainer.getText()).doesNotContain("Event is not soft-deleted");
+        assertThat(publicationControlContainer.getText()).doesNotContain("Crypto is enabled");
+        assertThat(publicationControlContainer.getText()).doesNotContain("Publication flag is enabled");
+        assertThat(publicationControlContainer.getText()).doesNotContain("Exists in local SROAST projection");
+
+        modeGroup.setValue(PublicationMode.ON);
+        applyButton.click();
+
+        EventPublicationSettings settings = dataManager.load(EventPublicationSettings.class)
+                .query("e.event = ?1", event)
+                .one();
+        assertThat(settings.getPublicationMode()).isEqualTo(PublicationMode.ON);
+        assertThat(modeGroup.getValue()).isEqualTo(PublicationMode.ON);
+    }
+
     @AfterEach
     void tearDown() {
         dataManager.load(EventTicketTier.class)
                 .query("e.megatixTierId like ?1", "ui-tier-%")
+                .list()
+                .forEach(dataManager::remove);
+        dataManager.load(EventPublicationSettings.class)
+                .query("e.event.megatixEventId like ?1", "ui-event-%")
                 .list()
                 .forEach(dataManager::remove);
         dataManager.load(Event.class)

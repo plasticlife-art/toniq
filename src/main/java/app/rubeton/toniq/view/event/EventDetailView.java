@@ -1,8 +1,12 @@
 package app.rubeton.toniq.view.event;
 
 import app.rubeton.toniq.entity.Event;
+import app.rubeton.toniq.entity.EventPublicationSettings;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.Organiser;
+import app.rubeton.toniq.entity.PublicationMode;
+import app.rubeton.toniq.service.EventPublicationService;
+import app.rubeton.toniq.service.PublicationDecision;
 import app.rubeton.toniq.view.main.MainView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,12 +17,17 @@ import com.vaadin.flow.component.html.H4;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.notification.NotificationVariant;
+import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.router.Route;
+import io.jmix.core.Messages;
+import io.jmix.flowui.Notifications;
 import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.component.textfield.TypedTextField;
 import io.jmix.flowui.model.CollectionPropertyContainer;
 import io.jmix.flowui.view.DialogMode;
 import io.jmix.flowui.view.EditedEntityContainer;
+import io.jmix.flowui.view.MessageBundle;
 import io.jmix.flowui.view.StandardDetailView;
 import io.jmix.flowui.view.ViewController;
 import io.jmix.flowui.view.ViewComponent;
@@ -29,6 +38,8 @@ import org.jsoup.nodes.Document;
 import org.jsoup.safety.Safelist;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -54,8 +65,20 @@ public class EventDetailView extends StandardDetailView<Event> {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private EventPublicationService eventPublicationService;
+
+    @Autowired
+    private Notifications notifications;
+
+    @Autowired
+    private Messages messages;
+
     @ViewComponent
     private TypedTextField<String> organiserNameField;
+
+    @ViewComponent
+    private MessageBundle messageBundle;
 
     @ViewComponent
     private Div descriptionContainer;
@@ -67,7 +90,12 @@ public class EventDetailView extends StandardDetailView<Event> {
     private Div photosContainer;
 
     @ViewComponent
+    private Div publicationControlContainer;
+
+    @ViewComponent
     private CollectionPropertyContainer<EventTicketTier> ticketTiersDc;
+
+    private RadioButtonGroup<PublicationMode> publicationModeGroup;
 
     @Subscribe
     public void onBeforeShow(final BeforeShowEvent event) {
@@ -77,7 +105,67 @@ public class EventDetailView extends StandardDetailView<Event> {
         descriptionContainer.getElement().setProperty("innerHTML", buildDescriptionMarkup(editedEvent));
         renderVenueDetails(editedEvent);
         renderPhotos(editedEvent);
+        renderPublicationControls(editedEvent);
         sortTicketTiers();
+    }
+
+    private void renderPublicationControls(final Event event) {
+        publicationControlContainer.removeAll();
+        publicationControlContainer.addClassNames("event-detail-card", "event-detail-card--publication");
+        publicationControlContainer.add(createSectionTitle(messageBundle.getMessage("publicationControlSectionTitle")));
+
+        EventPublicationSettings settings = eventPublicationService.ensurePublicationSettings(event);
+        PublicationDecision decision = eventPublicationService.getDecision(event);
+
+        publicationModeGroup = new RadioButtonGroup<>();
+        publicationModeGroup.setLabel(messageBundle.getMessage("publicationModeLabel"));
+        publicationModeGroup.setItems(PublicationMode.values());
+        publicationModeGroup.setItemLabelGenerator(this::getPublicationModeLabel);
+        publicationModeGroup.setValue(settings.getPublicationMode());
+        publicationModeGroup.addClassName("publication-mode-group");
+
+        Div badges = uiComponents.create(Div.class);
+        badges.addClassName("publication-status-badges");
+        badges.add(
+                createBadge(decision.effectivePublished()
+                        ? messageBundle.getMessage("publicationBadgePublished")
+                        : messageBundle.getMessage("publicationBadgeUnpublished"),
+                        decision.effectivePublished() ? "is-published" : "is-unpublished"),
+                createBadge(messageBundle.getMessage("publicationModeBadgePrefix") + " "
+                        + getPublicationModeLabel(decision.publicationMode()),
+                        "is-mode")
+        );
+
+        Paragraph webhookHint = uiComponents.create(Paragraph.class);
+        webhookHint.addClassName("publication-webhook-hint");
+        webhookHint.setText(decision.webhookHint());
+
+        Paragraph reason = uiComponents.create(Paragraph.class);
+        reason.addClassName("publication-block-reason");
+        reason.setText(decision.blockedReason() != null
+                ? decision.blockedReason()
+                : messageBundle.getMessage("publicationReasonReady"));
+
+        Button applyButton = uiComponents.create(Button.class);
+        applyButton.setId("applyPublicationModeButton");
+        applyButton.setText(messageBundle.getMessage("publicationApplyButton"));
+        applyButton.addClickListener(click -> applyPublicationMode());
+
+        publicationControlContainer.add(publicationModeGroup, badges, webhookHint, reason, applyButton);
+    }
+
+    private void applyPublicationMode() {
+        Event event = getEditedEntity();
+        PublicationMode selectedMode = publicationModeGroup != null ? publicationModeGroup.getValue() : null;
+        if (event == null || selectedMode == null) {
+            return;
+        }
+
+        eventPublicationService.setPublicationMode(event, selectedMode, "admin_mode_" + selectedMode.getId(), nowUtc());
+        renderPublicationControls(event);
+        notifications.create(messageBundle.getMessage("publicationModeSavedNotification"))
+                .withThemeVariant(NotificationVariant.LUMO_SUCCESS)
+                .show();
     }
 
     private void sortTicketTiers() {
@@ -204,6 +292,17 @@ public class EventDetailView extends StandardDetailView<Event> {
         container.add(row);
     }
 
+    private Span createBadge(final String text, final String variantClass) {
+        Span badge = uiComponents.create(Span.class);
+        badge.setText(text);
+        badge.addClassNames("publication-status-badge", variantClass);
+        return badge;
+    }
+
+    private String getPublicationModeLabel(final PublicationMode mode) {
+        return messages.getMessage("app.rubeton.toniq.entity/PublicationMode." + mode.name());
+    }
+
     private Image createPhotoThumbnail(final String photoUrl, final int index) {
         Image image = uiComponents.create(Image.class);
         image.setSrc(photoUrl);
@@ -272,5 +371,9 @@ public class EventDetailView extends StandardDetailView<Event> {
 
         String text = fieldNode.asText();
         return text == null || text.isBlank() ? null : text;
+    }
+
+    private OffsetDateTime nowUtc() {
+        return OffsetDateTime.now(ZoneOffset.UTC);
     }
 }

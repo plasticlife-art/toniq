@@ -41,6 +41,7 @@
             <dateTimePicker id="eventStartAtField" property="eventStartAt" readOnly="true"/>
             <dateTimePicker id="eventEndAtField" property="eventEndAt" readOnly="true"/>
             <textField id="timezoneNameField" property="timezoneName" readOnly="true"/>
+            <div id="publicationControlContainer" colspan="2" classNames="event-detail-card"/>
             <div id="descriptionContainer" colspan="2" classNames="event-description-preview"/>
             <div id="venueContainer" colspan="2" classNames="event-detail-card"/>
             <div id="photosContainer" colspan="2" classNames="event-detail-card"/>

@@ -50,11 +50,21 @@ public class EventPublicationSettings {
     private Boolean published = false;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "PUBLICATION_MODE", nullable = false, length = 20)
+    private PublicationMode publicationMode = PublicationMode.AUTO;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "PUBLICATION_STATE", nullable = false, length = 50)
     private PublicationState publicationState = PublicationState.DRAFT;
 
     @Column(name = "PUBLICATION_REASON", length = 255)
     private String publicationReason;
+
+    @Column(name = "LAST_MEGATIX_WEBHOOK_ENABLED")
+    private Boolean lastMegatixWebhookEnabled;
+
+    @Column(name = "LAST_MEGATIX_WEBHOOK_AT")
+    private OffsetDateTime lastMegatixWebhookAt;
 
     @Column(name = "FIRST_PUBLISHED_AT")
     private OffsetDateTime firstPublishedAt;
