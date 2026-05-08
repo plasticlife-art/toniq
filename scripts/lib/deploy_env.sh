@@ -66,7 +66,7 @@ setup_stack_env() {
   APP_SERVICE="${APP_SERVICE:-app}"
   FRONTEND_SERVICE="${FRONTEND_SERVICE:-frontend}"
   DB_SERVICE="${DB_SERVICE:-db}"
-  APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq}"
+  APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-backend}"
   APP_IMAGE_TAG="${APP_IMAGE_TAG:-latest}"
   FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-frontend}"
   FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG:-$APP_IMAGE_TAG}"

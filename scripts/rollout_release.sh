@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_ENV="${DEPLOY_ENV:-prod}"
-APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq}"
+APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-backend}"
 APP_IMAGE_TAG="${APP_IMAGE_TAG:-latest}"
 APP_IMAGE="${APP_IMAGE_REPOSITORY}:${APP_IMAGE_TAG}"
 FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-frontend}"

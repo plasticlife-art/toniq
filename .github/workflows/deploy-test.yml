@@ -53,4 +53,4 @@ jobs:
           remote_image_tag="$(printf '%q' "sha-$WORKFLOW_HEAD_SHA")"
 
           ssh -p "${TEST_DEPLOY_PORT:-22}" "${TEST_DEPLOY_USER}@${TEST_DEPLOY_HOST}" \
-            "cd ${remote_path} && ./scripts/deploy_release.sh --env test --yes --git-ref ${remote_ref} --image-tag ${remote_image_tag}"
+            "cd ${remote_path} && ./scripts/deploy_release.sh --env test --yes --git-ref ${remote_ref} --app-image-tag ${remote_image_tag} --frontend-image-tag ${remote_image_tag}"

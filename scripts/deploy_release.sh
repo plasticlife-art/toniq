@@ -3,15 +3,18 @@ set -Eeuo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_ENV="${DEPLOY_ENV:-prod}"
-APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq}"
+APP_IMAGE_REPOSITORY="${APP_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-backend}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-60}"
 HEALTH_SLEEP_SEC="${HEALTH_SLEEP_SEC:-2}"
 ASSUME_YES=0
 DEPLOY_TAG=""
 DEPLOY_GIT_REF=""
 DEPLOY_IMAGE_TAG=""
+DEPLOY_APP_IMAGE_TAG=""
+DEPLOY_FRONTEND_IMAGE_TAG=""
 TARGET_GIT_REF="main"
-APP_IMAGE_TAG="latest"
+APP_IMAGE_TAG=""
+FRONTEND_IMAGE_TAG=""
 
 usage() {
   cat <<'EOF'
@@ -21,9 +24,13 @@ Usage:
 Options:
   --env <prod|test>   Target stack. Default: prod.
   --yes               Non-interactive mode.
-  --tag <vX.Y.Z>      Deploy exact release tag.
+  --tag <tag>         Deploy exact release tag: backend-vX.Y.Z or frontend-vX.Y.Z.
   --git-ref <ref>     Deploy exact git ref/commit.
-  --image-tag <tag>   Deploy exact image tag.
+  --image-tag <tag>   Deploy exact image tag for both services.
+  --app-image-tag <tag>
+                     Deploy exact backend image tag.
+  --frontend-image-tag <tag>
+                     Deploy exact frontend image tag.
   -h, --help          Show this help.
 EOF
 }
@@ -32,7 +39,8 @@ log() { echo "[$(date '+%F %T')] $*"; }
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 validate_release_tag() {
-  [[ "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Release tag must match vX.Y.Z, got: $1"
+  [[ "$1" =~ ^(backend|frontend)-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+    fail "Release tag must match backend-vX.Y.Z or frontend-vX.Y.Z, got: $1"
 }
 
 ensure_clean_git_worktree() {
@@ -53,24 +61,38 @@ update_repo_for_deploy() {
   git fetch --prune --tags origin
 
   if [[ -n "$DEPLOY_TAG" ]]; then
+    local release_version
     validate_release_tag "$DEPLOY_TAG"
     git checkout -q "$DEPLOY_TAG"
     TARGET_GIT_REF="$DEPLOY_TAG"
-    APP_IMAGE_TAG="${DEPLOY_TAG#v}"
+    release_version="${DEPLOY_TAG#*-v}"
+    if [[ "$DEPLOY_TAG" == backend-v* ]]; then
+      APP_IMAGE_TAG="${DEPLOY_APP_IMAGE_TAG:-$release_version}"
+      FRONTEND_IMAGE_TAG="${DEPLOY_FRONTEND_IMAGE_TAG:-$FRONTEND_IMAGE_TAG}"
+    else
+      APP_IMAGE_TAG="${DEPLOY_APP_IMAGE_TAG:-$APP_IMAGE_TAG}"
+      FRONTEND_IMAGE_TAG="${DEPLOY_FRONTEND_IMAGE_TAG:-$release_version}"
+    fi
     return 0
   fi
 
   if [[ -n "$DEPLOY_GIT_REF" ]]; then
-    git checkout -q "$DEPLOY_GIT_REF"
+    local checkout_ref="$DEPLOY_GIT_REF"
+    if git rev-parse --verify "origin/$DEPLOY_GIT_REF" >/dev/null 2>&1; then
+      checkout_ref="origin/$DEPLOY_GIT_REF"
+    fi
+    git checkout -q "$checkout_ref"
     TARGET_GIT_REF="$(git rev-parse HEAD)"
-    APP_IMAGE_TAG="${DEPLOY_IMAGE_TAG:-sha-$TARGET_GIT_REF}"
+    APP_IMAGE_TAG="${DEPLOY_APP_IMAGE_TAG:-${DEPLOY_IMAGE_TAG:-sha-$TARGET_GIT_REF}}"
+    FRONTEND_IMAGE_TAG="${DEPLOY_FRONTEND_IMAGE_TAG:-${DEPLOY_IMAGE_TAG:-sha-$TARGET_GIT_REF}}"
     return 0
   fi
 
   git checkout -q main
   git pull --ff-only origin main
   TARGET_GIT_REF="main"
-  APP_IMAGE_TAG="${DEPLOY_IMAGE_TAG:-latest}"
+  APP_IMAGE_TAG="${DEPLOY_APP_IMAGE_TAG:-${DEPLOY_IMAGE_TAG:-$APP_IMAGE_TAG}}"
+  FRONTEND_IMAGE_TAG="${DEPLOY_FRONTEND_IMAGE_TAG:-${DEPLOY_IMAGE_TAG:-$FRONTEND_IMAGE_TAG}}"
 }
 
 post_rollout_check() {
@@ -114,6 +136,14 @@ while [[ $# -gt 0 ]]; do
       DEPLOY_IMAGE_TAG="${2:-}"
       shift 2
       ;;
+    --app-image-tag)
+      DEPLOY_APP_IMAGE_TAG="${2:-}"
+      shift 2
+      ;;
+    --frontend-image-tag)
+      DEPLOY_FRONTEND_IMAGE_TAG="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -135,8 +165,9 @@ setup_stack_env
 prompt_continue
 update_repo_for_deploy
 
-log "Deploy plan: env=$DEPLOY_ENV git_ref=$TARGET_GIT_REF image_tag=$APP_IMAGE_TAG"
-APP_GIT_REF="$TARGET_GIT_REF" APP_IMAGE_TAG="$APP_IMAGE_TAG" FRONTEND_IMAGE_TAG="$APP_IMAGE_TAG" \
+log "Deploy plan: env=$DEPLOY_ENV git_ref=$TARGET_GIT_REF"
+log "Deploy image tags: backend=$APP_IMAGE_TAG frontend=$FRONTEND_IMAGE_TAG"
+APP_GIT_REF="$TARGET_GIT_REF" APP_IMAGE_TAG="$APP_IMAGE_TAG" FRONTEND_IMAGE_TAG="$FRONTEND_IMAGE_TAG" \
 APP_IMAGE_REPOSITORY="$APP_IMAGE_REPOSITORY" FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-ghcr.io/plasticlife-art/toniq-frontend}" \
   "$APP_DIR/scripts/rollout_release.sh" --env "$DEPLOY_ENV"
 
