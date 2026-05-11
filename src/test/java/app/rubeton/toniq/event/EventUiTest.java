@@ -174,7 +174,7 @@ class EventUiTest {
     }
 
     @Test
-    void test_eventListShowsSyncSummaryColumnsAndLoadedSyncState() {
+    void test_eventListShowsCurrentColumnsAndLoadedSyncState() {
         String suffix = uniqueSuffix();
         Organiser organiser = saveOrganiser(suffix);
         Event event = saveEvent(organiser, suffix);
@@ -191,7 +191,7 @@ class EventUiTest {
 
         assertThat(eventsDataGrid.getColumns())
                 .extracting(column -> String.valueOf(column.getKey()))
-                .contains("publicationSettings.cryptoEnabled", "publicationSettings.published",
+                .contains("publicationSettings.publicationMode", "publicationSettings.publicationState",
                         "syncState.lastSyncedAt", "syncState.lastSyncResult", "syncState.lastAvailabilitySyncAt");
         assertThat(items.getItems())
                 .extracting(Event::getMegatixEventId)
