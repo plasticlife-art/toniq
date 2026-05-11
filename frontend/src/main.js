@@ -5,11 +5,16 @@ import {
   formatDateRange,
   formatMoney,
   getPublicApiBaseUrl,
+  resolveAvailabilityRefreshRequest,
   resolveApiRequest,
   toAvailabilityLabel
 } from "./app.js";
 
 const appRoot = document.getElementById("app");
+const liveRefreshState = {
+  requestUrl: null,
+  inFlight: false
+};
 
 boot().catch(() => {
   renderError();
@@ -39,20 +44,24 @@ async function boot() {
   }
 
   const payload = await response.json();
-  renderEvent(payload);
+  renderEvent(payload, apiBaseUrl);
   if (payload?.event?.title) {
     document.title = `${payload.event.title} | Toniq`;
   }
 }
 
-function renderEvent(payload) {
+function renderEvent(payload, apiBaseUrl = getPublicApiBaseUrl()) {
   const event = payload.event || {};
   const schedule = payload.schedule || {};
   const venue = payload.venue || {};
+  const status = payload.status || {};
+  const availability = payload.availability || {};
   const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
   const cta = payload.cta || {};
   const hasPhotos = Array.isArray(event.galleryImageUrls) && event.galleryImageUrls.length > 0;
   const heroImageUrl = hasPhotos ? event.galleryImageUrls[0] : null;
+  liveRefreshState.requestUrl = resolveAvailabilityRefreshRequest(event.megatixEventId, apiBaseUrl);
+  liveRefreshState.inFlight = false;
 
   appRoot.className = "event-page";
   appRoot.innerHTML = `
@@ -73,6 +82,7 @@ function renderEvent(payload) {
           ${renderMetaPill(formatDateRange(schedule.startAt, schedule.endAt, schedule.timezone))}
           ${venue.name ? renderMetaPill(escapeHtml(venue.name)) : ""}
         </div>
+        ${renderStatusDetail(status)}
         <div class="hero__cta">
           <button class="cta-button" type="button" disabled>${escapeHtml(cta.label || "Ticket link coming soon")}</button>
         </div>
@@ -83,8 +93,15 @@ function renderEvent(payload) {
         <div class="panel__header">
           <p class="panel__eyebrow">Tickets</p>
           <h2>Availability snapshot</h2>
+          <p class="panel__subtle">${escapeHtml(formatAvailabilityMeta(availability))}</p>
+          <div class="panel__actions">
+            <button class="refresh-button" type="button" data-live-refresh ${liveRefreshState.requestUrl ? "" : "disabled"}>
+              Refresh live
+            </button>
+            <p class="panel__feedback" data-live-refresh-feedback></p>
+          </div>
         </div>
-        ${renderTickets(tickets)}
+        <div data-ticket-list>${renderTickets(tickets)}</div>
       </aside>
       <div class="content-grid__main">
         ${renderDescription(event.descriptionHtml)}
@@ -92,6 +109,13 @@ function renderEvent(payload) {
       </div>
     </section>
   `;
+
+  const refreshButton = appRoot.querySelector("[data-live-refresh]");
+  if (refreshButton && liveRefreshState.requestUrl) {
+    refreshButton.addEventListener("click", () => {
+      void refreshLiveAvailability(apiBaseUrl);
+    });
+  }
 }
 
 function renderMetaPill(content) {
@@ -136,6 +160,13 @@ function renderTickets(tickets) {
       `).join("")}
     </div>
   `;
+}
+
+function formatAvailabilityMeta(availability) {
+  if (!availability?.lastUpdatedAt) {
+    return "Snapshot pending";
+  }
+  return `Last updated ${formatDate(availability.lastUpdatedAt)}`;
 }
 
 function renderAvailability(ticket) {
@@ -205,4 +236,50 @@ function renderError() {
       <p>Please try again later.</p>
     </section>
   `;
+}
+
+async function refreshLiveAvailability(apiBaseUrl) {
+  if (!liveRefreshState.requestUrl || liveRefreshState.inFlight) {
+    return;
+  }
+  liveRefreshState.inFlight = true;
+  const button = appRoot.querySelector("[data-live-refresh]");
+  const feedback = appRoot.querySelector("[data-live-refresh-feedback]");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Refreshing...";
+  }
+  if (feedback) {
+    feedback.textContent = "";
+  }
+
+  try {
+    const response = await fetch(liveRefreshState.requestUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    if (!response.ok) {
+      if (feedback) {
+        feedback.textContent = response.status === 409
+          ? "Refresh already in progress."
+          : "Live refresh is unavailable right now.";
+      }
+      return;
+    }
+    const payload = await response.json();
+    renderEvent(payload, apiBaseUrl);
+  } catch {
+    if (feedback) {
+      feedback.textContent = "Live refresh is unavailable right now.";
+    }
+  } finally {
+    liveRefreshState.inFlight = false;
+    const nextButton = appRoot.querySelector("[data-live-refresh]");
+    if (nextButton) {
+      nextButton.disabled = !liveRefreshState.requestUrl;
+      nextButton.textContent = "Refresh live";
+    }
+  }
 }

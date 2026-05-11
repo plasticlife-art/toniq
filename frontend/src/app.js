@@ -18,6 +18,13 @@ export function resolveApiRequest(pathname, apiBaseUrl) {
   return null;
 }
 
+export function resolveAvailabilityRefreshRequest(megatixEventId, apiBaseUrl) {
+  if (!megatixEventId) {
+    return null;
+  }
+  return `${trimTrailingSlash(apiBaseUrl)}/events/${encodeURIComponent(megatixEventId)}/availability/refresh`;
+}
+
 export function formatDate(value) {
   if (!value) {
     return "";

@@ -10,12 +10,14 @@ public record PublicEventDetailResponse(
         ScheduleDto schedule,
         VenueDto venue,
         StatusDto status,
+        AvailabilityDto availability,
         List<TicketDto> tickets,
         CtaDto cta
 ) {
 
     public record EventDto(
             UUID id,
+            String megatixEventId,
             String slug,
             String title,
             String organiserName,
@@ -45,6 +47,12 @@ public record PublicEventDetailResponse(
             String statusLabel,
             OffsetDateTime rescheduledStartAt,
             OffsetDateTime rescheduledEndAt
+    ) {
+    }
+
+    public record AvailabilityDto(
+            OffsetDateTime lastUpdatedAt,
+            String source
     ) {
     }
 

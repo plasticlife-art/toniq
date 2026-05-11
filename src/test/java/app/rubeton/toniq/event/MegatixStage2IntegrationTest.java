@@ -13,11 +13,13 @@ import app.rubeton.toniq.entity.SyncLogStatus;
 import app.rubeton.toniq.entity.SyncLogScope;
 import app.rubeton.toniq.entity.SyncLogTriggerSource;
 import app.rubeton.toniq.entity.SyncResult;
+import app.rubeton.toniq.entity.TierAvailabilityState;
 import app.rubeton.toniq.service.MegatixClient;
 import app.rubeton.toniq.service.EventPublicationService;
 import app.rubeton.toniq.service.megatix.ManualSyncStatusService;
 import app.rubeton.toniq.service.megatix.MegatixAuthService;
 import app.rubeton.toniq.service.megatix.MegatixSyncCoordinator;
+import app.rubeton.toniq.service.impl.BackgroundRefreshPollingService;
 import app.rubeton.toniq.service.megatix.impl.MegatixSyncCoordinatorImpl;
 import app.rubeton.toniq.service.megatix.model.ManualSyncHandle;
 import app.rubeton.toniq.service.megatix.model.ManualSyncStatus;
@@ -91,6 +93,9 @@ class MegatixStage2IntegrationTest {
 
     @Autowired
     MegatixSyncCoordinatorImpl megatixSyncCoordinatorImpl;
+
+    @Autowired
+    BackgroundRefreshPollingService backgroundRefreshPollingService;
 
     @Autowired
     ManualSyncStatusService manualSyncStatusService;
@@ -611,6 +616,253 @@ class MegatixStage2IntegrationTest {
     }
 
     @Test
+    void liveAvailabilityRefreshEndpointUpdatesStoredSnapshot() throws Exception {
+        enqueueHappyImport("evt-live-refresh", "Live Refresh Event", true);
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-live-refresh","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-live-refresh");
+            return log != null && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        megatixAuthService.evictAccessToken();
+        enqueueJson(200, """
+                {"token_type":"Bearer","access_token":"token-2","expires_in":3600}
+                """);
+        enqueueJson(200, """
+                {
+                  "data":{
+                    "id":"evt-live-refresh",
+                    "promoter_id":"998",
+                    "name":"Live Refresh Event",
+                    "slug":"event-slug",
+                    "description":"Imported event description",
+                    "currency_code_iso4217":"THB",
+                    "start_datetime":"2026-05-06T18:00:00Z",
+                    "end_datetime":"2026-05-06T21:00:00Z",
+                    "cover":"https://cdn.example.com/photo.jpg",
+                    "venue":{"name":"Main Hall","city":"Podgorica","timezone":"UTC"},
+                    "tickets":[
+                      {
+                        "id":"tier-1",
+                        "name":"First Tier",
+                        "description":"First tier",
+                        "currency":"EUR",
+                        "price":20.00,
+                        "display_order":1,
+                        "free_seats_count":4,
+                        "is_sold_out":false
+                      },
+                      {
+                        "id":"tier-2",
+                        "name":"Second Tier",
+                        "description":"Second tier",
+                        "currency":"EUR",
+                        "price":35.00,
+                        "display_order":2,
+                        "free_seats_count":0,
+                        "is_sold_out":true
+                      }
+                    ]
+                  }
+                }
+                """);
+
+        mockMvc.perform(post("/api/public/events/{id}/availability/refresh", "evt-live-refresh"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.event.megatixEventId").value("evt-live-refresh"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.availability.lastUpdatedAt").isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.tickets[0].availabilityCount").value(4))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.tickets[0].availabilityState").value("low"));
+
+        Event event = findEvent("evt-live-refresh");
+        EventSyncState syncState = loadSyncState(event);
+        List<EventTicketTier> tiers = loadTiers(event);
+        EventSyncLog refreshLog = latestSyncLog("evt-live-refresh");
+
+        assertThat(syncState.getLastAvailabilitySyncAt()).isNotNull();
+        assertThat(tiers).extracting(EventTicketTier::getAvailabilityCount).containsExactly(4, 0);
+        assertThat(tiers).extracting(EventTicketTier::getAvailabilityState)
+                .containsExactly(TierAvailabilityState.LOW, TierAvailabilityState.SOLD_OUT);
+        assertThat(refreshLog.getTriggerSource()).isEqualTo(SyncLogTriggerSource.MANUAL);
+        assertThat(refreshLog.getSyncScope()).isEqualTo(SyncLogScope.AVAILABILITY_REFRESH);
+        assertThat(refreshLog.getStatus()).isEqualTo(SyncLogStatus.SUCCESS);
+    }
+
+    @Test
+    void liveAvailabilityRefreshFailureKeepsPreviousSnapshot() throws Exception {
+        enqueueHappyImport("evt-live-refresh-fail", "Live Refresh Fail Event", true);
+
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-live-refresh-fail","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-live-refresh-fail");
+            return log != null && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        Event eventBeforeFailure = findEvent("evt-live-refresh-fail");
+        List<EventTicketTier> tiersBeforeFailure = loadTiers(eventBeforeFailure);
+
+        megatixAuthService.evictAccessToken();
+        enqueueJson(200, """
+                {"token_type":"Bearer","access_token":"token-2","expires_in":3600}
+                """);
+        enqueueJson(500, """
+                {"message":"upstream timeout"}
+                """);
+
+        mockMvc.perform(post("/api/public/events/{id}/availability/refresh", "evt-live-refresh-fail"))
+                .andExpect(status().isBadGateway());
+
+        Event eventAfterFailure = findEvent("evt-live-refresh-fail");
+        List<EventTicketTier> tiersAfterFailure = loadTiers(eventAfterFailure);
+        EventSyncLog refreshLog = latestSyncLog("evt-live-refresh-fail");
+
+        assertThat(tiersAfterFailure).extracting(EventTicketTier::getAvailabilityCount)
+                .containsExactlyElementsOf(tiersBeforeFailure.stream().map(EventTicketTier::getAvailabilityCount).toList());
+        assertThat(refreshLog.getSyncScope()).isEqualTo(SyncLogScope.AVAILABILITY_REFRESH);
+        assertThat(refreshLog.getStatus()).isEqualTo(SyncLogStatus.FAILURE);
+    }
+
+    @Test
+    void backgroundPollingRefreshesOnlyPublishedCryptoEnabledEvents() throws Exception {
+        enqueueHappyImport("evt-poll-public", "Poll Public Event", true);
+        mockMvc.perform(post("/api/megatix/webhook")
+                        .header("x-signature", "test-signature")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"event.ota.status.updated","data":{"event_id":"evt-poll-public","enabled":true}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        waitUntilNotNull(() -> {
+            EventSyncLog log = latestSyncLog("evt-poll-public");
+            return log != null && log.getStatus() == SyncLogStatus.SUCCESS ? log : null;
+        });
+
+        createHiddenLocalEvent("evt-poll-hidden", "Poll Hidden Event");
+
+        megatixAuthService.evictAccessToken();
+        enqueueJson(200, """
+                {"token_type":"Bearer","access_token":"token-2","expires_in":3600}
+                """);
+        enqueueJson(200, """
+                {
+                  "data":{
+                    "id":"evt-poll-public",
+                    "promoter_id":"998",
+                    "name":"Poll Public Event Updated",
+                    "slug":"event-slug",
+                    "description":"Imported event description",
+                    "currency_code_iso4217":"THB",
+                    "start_datetime":"2026-05-06T18:00:00Z",
+                    "end_datetime":"2026-05-06T21:00:00Z",
+                    "cover":"https://cdn.example.com/photo.jpg",
+                    "venue":{"name":"Main Hall","city":"Podgorica","timezone":"UTC"},
+                    "tickets":[
+                      {
+                        "id":"tier-1",
+                        "name":"First Tier",
+                        "description":"First tier",
+                        "currency":"EUR",
+                        "price":20.00,
+                        "display_order":1,
+                        "free_seats_count":6,
+                        "is_sold_out":false
+                      },
+                      {
+                        "id":"tier-2",
+                        "name":"Second Tier",
+                        "description":"Second tier",
+                        "currency":"EUR",
+                        "price":35.00,
+                        "display_order":2,
+                        "free_seats_count":0,
+                        "is_sold_out":true
+                      }
+                    ]
+                  }
+                }
+                """);
+        enqueueJson(200, """
+                {
+                  "data":{
+                    "id":"evt-poll-public",
+                    "promoter_id":"998",
+                    "name":"Poll Public Event Updated",
+                    "slug":"event-slug",
+                    "description":"Imported event description",
+                    "currency_code_iso4217":"THB",
+                    "start_datetime":"2026-05-06T18:00:00Z",
+                    "end_datetime":"2026-05-06T21:00:00Z",
+                    "cover":"https://cdn.example.com/photo.jpg",
+                    "venue":{"name":"Main Hall","city":"Podgorica","timezone":"UTC"},
+                    "tickets":[
+                      {
+                        "id":"tier-1",
+                        "name":"First Tier",
+                        "description":"First tier",
+                        "currency":"EUR",
+                        "price":20.00,
+                        "display_order":1,
+                        "free_seats_count":6,
+                        "is_sold_out":false
+                      },
+                      {
+                        "id":"tier-2",
+                        "name":"Second Tier",
+                        "description":"Second tier",
+                        "currency":"EUR",
+                        "price":35.00,
+                        "display_order":2,
+                        "free_seats_count":0,
+                        "is_sold_out":true
+                      }
+                    ]
+                  }
+                }
+                """);
+        enqueueJson(200, """
+                {"data":{"name":"Promoter A","description":null,"settlement_details":{"account_number":"1750000692680","account_bsb":"MANDIRI","account_name":"PT. Kharisma Anugrah Jawara Abadi","country_code":"ID","wallet_address":"0x123"}}}
+                """);
+
+        backgroundRefreshPollingService.refreshPublishedAvailability();
+        backgroundRefreshPollingService.refreshPublishedEventData();
+
+        Event publicEvent = findEvent("evt-poll-public");
+        Event hiddenEvent = findEvent("evt-poll-hidden");
+        List<EventTicketTier> publicTiers = loadTiers(publicEvent);
+        List<EventTicketTier> hiddenTiers = loadTiers(hiddenEvent);
+
+        assertThat(publicEvent.getTitle()).isEqualTo("Poll Public Event Updated");
+        assertThat(publicTiers.get(0).getAvailabilityCount()).isEqualTo(6);
+        assertThat(hiddenTiers.get(0).getAvailabilityCount()).isEqualTo(25);
+
+        List<EventSyncLog> publicLogs = systemAuthenticator.withSystem(() -> dataManager.load(EventSyncLog.class)
+                .query("e.megatixEventId = ?1 order by e.createdAt", "evt-poll-public")
+                .list());
+        assertThat(publicLogs).anyMatch(log -> log.getTriggerSource() == SyncLogTriggerSource.POLLING
+                && log.getSyncScope() == SyncLogScope.AVAILABILITY_REFRESH
+                && log.getStatus() == SyncLogStatus.SUCCESS);
+        assertThat(publicLogs).anyMatch(log -> log.getTriggerSource() == SyncLogTriggerSource.POLLING
+                && log.getSyncScope() == SyncLogScope.EVENT_REFRESH
+                && log.getStatus() == SyncLogStatus.SUCCESS);
+    }
+
+    @Test
     void manualSyncEvictsLockEntriesAfterCompletionAndReuse() {
         enqueueHappyImport("evt-lock-cleanup", "Lock Cleanup Event", true);
 
@@ -769,6 +1021,45 @@ class MegatixStage2IntegrationTest {
                   "meta":{"locales":{"0":"en"}}
                 }
                 """.formatted(title, secondTier);
+    }
+
+    private void createHiddenLocalEvent(final String eventId, final String title) {
+        systemAuthenticator.runWithSystem(() -> {
+            Organiser organiser = dataManager.create(Organiser.class);
+            organiser.setMegatixOrganiserId("hidden-org-" + eventId);
+            organiser.setName("Hidden Organiser " + eventId);
+            organiser.setEmail("hidden-" + eventId + "@example.com");
+            organiser.setCreatedAt(nowUtc());
+            organiser.setUpdatedAt(nowUtc());
+            organiser = dataManager.save(organiser);
+
+            Event event = dataManager.create(Event.class);
+            event.setMegatixEventId(eventId);
+            event.setOrganiser(organiser);
+            event.setTitle(title);
+            event.setRawPayloadJson("{\"projection\":true}");
+            event.setCreatedAt(nowUtc());
+            event.setUpdatedAt(nowUtc());
+            event = dataManager.save(event);
+
+            EventTicketTier tier = dataManager.create(EventTicketTier.class);
+            tier.setEvent(event);
+            tier.setMegatixTierId(eventId + "-tier-1");
+            tier.setName("Hidden Tier");
+            tier.setCurrencyCode("EUR");
+            tier.setFacePrice(java.math.BigDecimal.valueOf(20));
+            tier.setAvailabilityCount(25);
+            tier.setAvailabilityState(TierAvailabilityState.AVAILABLE);
+            tier.setDisplayOrder(1);
+            tier.setIsActive(true);
+            tier.setLastAvailabilitySyncAt(nowUtc());
+            tier.setCreatedAt(nowUtc());
+            tier.setUpdatedAt(nowUtc());
+            dataManager.save(tier);
+
+            eventPublicationService.publish(event, true, "seed_hidden_event", nowUtc());
+            eventPublicationService.setPublicationMode(event, PublicationMode.OFF, "admin_mode_off", nowUtc());
+        });
     }
 
     private Event findEvent(final String megatixEventId) {

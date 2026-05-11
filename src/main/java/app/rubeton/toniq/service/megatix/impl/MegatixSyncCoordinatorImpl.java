@@ -6,6 +6,7 @@ import app.rubeton.toniq.entity.PublicationMode;
 import app.rubeton.toniq.entity.EventSyncLog;
 import app.rubeton.toniq.entity.SyncLogScope;
 import app.rubeton.toniq.entity.SyncLogTriggerSource;
+import app.rubeton.toniq.service.EventExecutionLockService;
 import app.rubeton.toniq.service.EventPublicationService;
 import app.rubeton.toniq.service.EventSyncService;
 import app.rubeton.toniq.service.megatix.MegatixSyncCoordinator;
@@ -20,9 +21,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
@@ -34,8 +32,7 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
     private final DataManager dataManager;
     private final TaskExecutor megatixSyncTaskExecutor;
     private final SystemAuthenticator systemAuthenticator;
-
-    private final ConcurrentHashMap<String, EventLockEntry> eventLocks = new ConcurrentHashMap<>();
+    private final EventExecutionLockService eventExecutionLockService;
 
     @Override
     public void submitWebhook(final MegatixWebhookCommand command) {
@@ -88,18 +85,14 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
     private void runImportFlow(final String eventId, final SyncLogTriggerSource triggerSource,
                                final SyncLogScope syncScope, final String requestPayloadJson,
                                final Boolean webhookEnabled) {
-        EventLockEntry lockEntry = acquireEventLockEntry(eventId);
-        ReentrantLock lock = lockEntry.lock();
         Event existingEvent = findEvent(eventId);
         EventSyncLog syncLog = eventSyncService.recordSyncStarted(eventId, existingEvent, triggerSource, syncScope, requestPayloadJson);
-        if (!lock.tryLock()) {
-            eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
-                    "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
-            releaseEventLockEntry(eventId, lockEntry);
-            return;
-        }
-
-        try {
+        try (EventExecutionLockService.EventExecutionLockHandle lockHandle = eventExecutionLockService.tryAcquire(eventId)) {
+            if (!lockHandle.acquired()) {
+                eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
+                        "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
+                return;
+            }
             Event importedEvent = eventSyncService.importEvent(eventId);
             if (webhookEnabled != null) {
                 eventPublicationService.recordMegatixWebhookState(importedEvent, webhookEnabled,
@@ -112,25 +105,18 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
             Event currentEvent = findEvent(eventId);
             eventSyncService.recordSyncFailure(syncLog, currentEvent != null ? currentEvent : existingEvent,
                     "import_failed", e.getMessage(), "{\"outcome\":\"failed\"}");
-        } finally {
-            lock.unlock();
-            releaseEventLockEntry(eventId, lockEntry);
         }
     }
 
     private void runImportFlow(final java.util.UUID syncLogId, final String eventId,
                                final Event existingEvent, final Boolean webhookEnabled) {
-        EventLockEntry lockEntry = acquireEventLockEntry(eventId);
-        ReentrantLock lock = lockEntry.lock();
         EventSyncLog syncLog = dataManager.load(EventSyncLog.class).id(syncLogId).one();
-        if (!lock.tryLock()) {
-            eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
-                    "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
-            releaseEventLockEntry(eventId, lockEntry);
-            return;
-        }
-
-        try {
+        try (EventExecutionLockService.EventExecutionLockHandle lockHandle = eventExecutionLockService.tryAcquire(eventId)) {
+            if (!lockHandle.acquired()) {
+                eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
+                        "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
+                return;
+            }
             Event importedEvent = eventSyncService.importEvent(eventId);
             if (webhookEnabled != null) {
                 eventPublicationService.recordMegatixWebhookState(importedEvent, webhookEnabled,
@@ -143,26 +129,19 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
             Event currentEvent = findEvent(eventId);
             eventSyncService.recordSyncFailure(syncLog, currentEvent != null ? currentEvent : existingEvent,
                     "import_failed", e.getMessage(), "{\"outcome\":\"failed\"}");
-        } finally {
-            lock.unlock();
-            releaseEventLockEntry(eventId, lockEntry);
         }
     }
 
     private void runDisableFlow(final String eventId, final String requestPayloadJson) {
-        EventLockEntry lockEntry = acquireEventLockEntry(eventId);
-        ReentrantLock lock = lockEntry.lock();
         Event existingEvent = findEvent(eventId);
         EventSyncLog syncLog = eventSyncService.recordSyncStarted(eventId, existingEvent,
                 SyncLogTriggerSource.WEBHOOK_DISABLE, SyncLogScope.UNPUBLISH, requestPayloadJson);
-        if (!lock.tryLock()) {
-            eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
-                    "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
-            releaseEventLockEntry(eventId, lockEntry);
-            return;
-        }
-
-        try {
+        try (EventExecutionLockService.EventExecutionLockHandle lockHandle = eventExecutionLockService.tryAcquire(eventId)) {
+            if (!lockHandle.acquired()) {
+                eventSyncService.recordSyncIgnored(syncLog, existingEvent, "sync_in_progress",
+                        "Sync already running for event " + eventId, "{\"outcome\":\"ignored_in_flight\"}");
+                return;
+            }
             if (existingEvent != null) {
                 eventPublicationService.recordMegatixWebhookState(existingEvent, false, "megatix_webhook_disabled", nowUtc());
                 eventPublicationService.reconcile(existingEvent, nowUtc());
@@ -172,35 +151,11 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
             log.error("Megatix unpublish failed for event {}", eventId, e);
             eventSyncService.recordSyncFailure(syncLog, existingEvent,
                     "unpublish_failed", e.getMessage(), "{\"outcome\":\"failed\"}");
-        } finally {
-            lock.unlock();
-            releaseEventLockEntry(eventId, lockEntry);
         }
     }
 
     int activeEventLockCount() {
-        return eventLocks.size();
-    }
-
-    private EventLockEntry acquireEventLockEntry(final String eventId) {
-        return eventLocks.compute(eventId, (ignored, existing) -> {
-            EventLockEntry entry = existing != null ? existing : new EventLockEntry();
-            entry.retain();
-            return entry;
-        });
-    }
-
-    private void releaseEventLockEntry(final String eventId, final EventLockEntry expectedEntry) {
-        eventLocks.computeIfPresent(eventId, (ignored, existing) -> {
-            if (existing != expectedEntry) {
-                return existing;
-            }
-            int references = existing.release();
-            if (references < 0) {
-                throw new IllegalStateException("Event lock ref-count became negative for event " + eventId);
-            }
-            return references == 0 ? null : existing;
-        });
+        return eventExecutionLockService.activeLockCount();
     }
 
     private Event findEvent(final String megatixEventId) {
@@ -215,22 +170,5 @@ public class MegatixSyncCoordinatorImpl implements MegatixSyncCoordinator {
 
     private OffsetDateTime nowUtc() {
         return OffsetDateTime.now(ZoneOffset.UTC);
-    }
-
-    private static final class EventLockEntry {
-        private final ReentrantLock lock = new ReentrantLock();
-        private final AtomicInteger references = new AtomicInteger();
-
-        private ReentrantLock lock() {
-            return lock;
-        }
-
-        private void retain() {
-            references.incrementAndGet();
-        }
-
-        private int release() {
-            return references.decrementAndGet();
-        }
     }
 }

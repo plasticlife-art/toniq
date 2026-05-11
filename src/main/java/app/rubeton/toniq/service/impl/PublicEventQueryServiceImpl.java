@@ -2,6 +2,7 @@ package app.rubeton.toniq.service.impl;
 
 import app.rubeton.toniq.entity.Event;
 import app.rubeton.toniq.entity.EventStatusOverride;
+import app.rubeton.toniq.entity.EventSyncState;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.OverrideStatus;
 import app.rubeton.toniq.service.EventStatusService;
@@ -80,6 +81,7 @@ public class PublicEventQueryServiceImpl implements PublicEventQueryService {
         return new PublicEventDetailResponse(
                 new PublicEventDetailResponse.EventDto(
                         event.getId(),
+                        event.getMegatixEventId(),
                         event.getSlug(),
                         event.getTitle(),
                         event.getOrganiser() != null ? event.getOrganiser().getName() : null,
@@ -108,6 +110,10 @@ public class PublicEventQueryServiceImpl implements PublicEventQueryService {
                                 ? activeOverride.getRescheduledEventEndAt()
                                 : null
                 ),
+                new PublicEventDetailResponse.AvailabilityDto(
+                        resolveAvailabilityLastUpdatedAt(event),
+                        "stored_snapshot"
+                ),
                 activeTickets,
                 resolveCta(effectiveStatus, activeTickets)
         );
@@ -133,6 +139,23 @@ public class PublicEventQueryServiceImpl implements PublicEventQueryService {
             ));
         }
         return ticketDtos;
+    }
+
+    private java.time.OffsetDateTime resolveAvailabilityLastUpdatedAt(final Event event) {
+        EventSyncState syncState = dataManager.load(EventSyncState.class)
+                .query("e.event = ?1", event)
+                .optional()
+                .orElse(null);
+        if (syncState != null && syncState.getLastAvailabilitySyncAt() != null) {
+            return syncState.getLastAvailabilitySyncAt();
+        }
+
+        return dataManager.loadValue(
+                        "select max(e.lastAvailabilitySyncAt) from EventTicketTier e where e.event = :event",
+                        java.time.OffsetDateTime.class)
+                .parameter("event", event)
+                .optional()
+                .orElse(null);
     }
 
     private PublicEventDetailResponse.CtaDto resolveCta(final String effectiveStatus,

@@ -121,6 +121,7 @@ class PublicEventApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.event.slug").value(slug))
                 .andExpect(jsonPath("$.event.id").value(event.getId().toString()))
+                .andExpect(jsonPath("$.event.megatixEventId").value(event.getMegatixEventId()))
                 .andExpect(jsonPath("$.event.organiserName").value("Public Organiser " + suffix))
                 .andExpect(jsonPath("$.event.heroImageUrl").value("https://cdn.example.com/hero.jpg"))
                 .andExpect(jsonPath("$.event.galleryImageUrls.length()").value(2))
@@ -131,6 +132,8 @@ class PublicEventApiTest {
                 .andExpect(jsonPath("$.status.effectiveStatus").value("rescheduled"))
                 .andExpect(jsonPath("$.status.statusLabel").value("Rescheduled"))
                 .andExpect(jsonPath("$.status.rescheduledStartAt").isNotEmpty())
+                .andExpect(jsonPath("$.availability.lastUpdatedAt").isNotEmpty())
+                .andExpect(jsonPath("$.availability.source").value("stored_snapshot"))
                 .andExpect(jsonPath("$.tickets.length()").value(2))
                 .andExpect(jsonPath("$.tickets[0].name").value("General"))
                 .andExpect(jsonPath("$.tickets[1].name").value("VIP"))
@@ -149,7 +152,9 @@ class PublicEventApiTest {
         mockMvc.perform(get("/api/public/events/{id}", event.getMegatixEventId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.event.id").value(event.getId().toString()))
+                .andExpect(jsonPath("$.event.megatixEventId").value(event.getMegatixEventId()))
                 .andExpect(jsonPath("$.event.slug").doesNotExist())
+                .andExpect(jsonPath("$.availability.source").value("stored_snapshot"))
                 .andExpect(jsonPath("$.status.effectiveStatus").value("active"));
     }
 
