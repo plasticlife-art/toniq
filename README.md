@@ -64,24 +64,15 @@ docker compose up --build
 ```
 
 By default, the stack starts:
-* Caddy edge proxy on <http://localhost>
 * PostgreSQL on `127.0.0.1:5432`
 * Backend/admin application on <http://127.0.0.1:8080>
 * Public frontend on <http://127.0.0.1:8081>
 
-By default, Caddy routes:
-* `localhost` to the public frontend
-* `admin.localhost` to the backend/admin UI
-
-You can override ports, domains, and database credentials with variables such as `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`, `PUBLIC_DOMAIN`, `ADMIN_DOMAIN`, `APP_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+You can override local ports and database credentials with variables such as `APP_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
 
 The public event-detail app is built and deployed separately from the backend:
 * backend image: Spring/Jmix admin UI + public API
 * frontend image: static public app served by Nginx
-
-In the default Docker setup, Caddy terminates external traffic and routes by host:
-* `PUBLIC_DOMAIN` -> frontend container
-* `ADMIN_DOMAIN` -> backend container
 
 Inside the stack, the frontend still proxies `/api/*` to the backend over Docker network/DNS, so the public site stays on one origin and no CORS configuration is required.
 
@@ -107,7 +98,11 @@ For VPS deployment, set at least:
 * `POSTGRES_PASSWORD`
 * `MEGATIX_*`
 
-Point both domains to the VPS IP. Caddy will obtain and renew TLS certificates automatically.
+Point both domains to the VPS IP and configure a system-level reverse proxy such as Caddy to route:
+* `PUBLIC_DOMAIN` -> `127.0.0.1:<FRONTEND_PORT>`
+* `ADMIN_DOMAIN` -> `127.0.0.1:<APP_PORT>`
+
+The project no longer includes Caddy inside `docker-compose.yml`; on VPS, `prod` and `test` are expected to share one system-level proxy.
 
 Useful commands:
 

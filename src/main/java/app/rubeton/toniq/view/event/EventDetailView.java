@@ -2,6 +2,7 @@ package app.rubeton.toniq.view.event;
 
 import app.rubeton.toniq.entity.Event;
 import app.rubeton.toniq.entity.EventPublicationSettings;
+import app.rubeton.toniq.entity.EventSyncLog;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.Organiser;
 import app.rubeton.toniq.entity.PublicationMode;
@@ -12,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.HasComponents;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H4;
 import com.vaadin.flow.component.html.Image;
@@ -19,11 +21,16 @@ import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
+import com.vaadin.flow.component.textfield.TextArea;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.Route;
+import io.jmix.core.DataManager;
 import io.jmix.core.Messages;
 import io.jmix.flowui.Notifications;
+import io.jmix.flowui.component.grid.DataGrid;
 import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.component.textfield.TypedTextField;
+import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.model.CollectionPropertyContainer;
 import io.jmix.flowui.view.DialogMode;
 import io.jmix.flowui.view.EditedEntityContainer;
@@ -43,6 +50,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 @Route(value = "events/:id", layout = MainView.class)
 @ViewController(id = "Event.detail")
@@ -74,6 +82,9 @@ public class EventDetailView extends StandardDetailView<Event> {
     @Autowired
     private Messages messages;
 
+    @Autowired
+    private DataManager dataManager;
+
     @ViewComponent
     private TypedTextField<String> organiserNameField;
 
@@ -95,7 +106,18 @@ public class EventDetailView extends StandardDetailView<Event> {
     @ViewComponent
     private CollectionPropertyContainer<EventTicketTier> ticketTiersDc;
 
+    @ViewComponent
+    private CollectionContainer<EventSyncLog> syncLogsDc;
+
+    @ViewComponent
+    private DataGrid<EventSyncLog> syncLogsDataGrid;
+
     private RadioButtonGroup<PublicationMode> publicationModeGroup;
+
+    @Subscribe
+    public void onInit(final InitEvent event) {
+        syncLogsDataGrid.addItemDoubleClickListener(click -> openSyncLogDetailsDialog(click.getItem()));
+    }
 
     @Subscribe
     public void onBeforeShow(final BeforeShowEvent event) {
@@ -107,6 +129,22 @@ public class EventDetailView extends StandardDetailView<Event> {
         renderPhotos(editedEvent);
         renderPublicationControls(editedEvent);
         sortTicketTiers();
+        loadRecentSyncLogs(editedEvent);
+    }
+
+    @Subscribe("viewSyncLogDetailsButton")
+    public void onViewSyncLogDetailsButtonClick(final com.vaadin.flow.component.ClickEvent<Button> event) {
+        EventSyncLog selectedLog = syncLogsDc.getItemOrNull();
+        if (selectedLog == null && !syncLogsDc.getItems().isEmpty()) {
+            selectedLog = syncLogsDc.getItems().iterator().next();
+        }
+        if (selectedLog == null) {
+            notifications.create(messageBundle.getMessage("selectSyncLogNotification"))
+                    .withThemeVariant(NotificationVariant.LUMO_WARNING)
+                    .show();
+            return;
+        }
+        openSyncLogDetailsDialog(selectedLog);
     }
 
     private void renderPublicationControls(final Event event) {
@@ -174,6 +212,20 @@ public class EventDetailView extends StandardDetailView<Event> {
         List<EventTicketTier> sortedTiers = new ArrayList<>(ticketTiersDc.getItems());
         sortedTiers.sort(TICKET_TIER_ORDER);
         ticketTiersDc.setDisconnectedItems(sortedTiers);
+    }
+
+    private void loadRecentSyncLogs(final Event event) {
+        if (event == null || event.getId() == null) {
+            syncLogsDc.getMutableItems().clear();
+            return;
+        }
+
+        List<EventSyncLog> recentLogs = dataManager.load(EventSyncLog.class)
+                .query("select e from EventSyncLog e where e.event = ?1 order by e.startedAt desc", event)
+                .maxResults(20)
+                .list();
+        syncLogsDc.getMutableItems().clear();
+        syncLogsDc.getMutableItems().addAll(recentLogs);
     }
 
     private String buildDescriptionMarkup(final Event event) {
@@ -274,7 +326,7 @@ public class EventDetailView extends StandardDetailView<Event> {
         return empty;
     }
 
-    private void addMetaRow(final Div container, final String label, final String value) {
+    private void addMetaRow(final HasComponents container, final String label, final String value) {
         if (value == null || value.isBlank()) {
             return;
         }
@@ -341,6 +393,61 @@ public class EventDetailView extends StandardDetailView<Event> {
         content.add(fullImage, closeButton);
         dialog.add(content);
         dialog.open();
+    }
+
+    private void openSyncLogDetailsDialog(final EventSyncLog syncLog) {
+        Dialog dialog = uiComponents.create(Dialog.class);
+        dialog.setHeaderTitle(messageBundle.getMessage("syncLogDetailsDialogTitle"));
+        dialog.setModal(true);
+        dialog.setDraggable(false);
+        dialog.setResizable(true);
+        dialog.setCloseOnEsc(true);
+        dialog.setCloseOnOutsideClick(true);
+        dialog.setWidth("min(96vw, 980px)");
+        dialog.setMaxWidth("980px");
+
+        VerticalLayout content = new VerticalLayout();
+        content.setPadding(false);
+        content.setSpacing(true);
+        content.setWidthFull();
+
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.startedAt"),
+                syncLog.getStartedAt() != null ? syncLog.getStartedAt().toString() : null);
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.finishedAt"),
+                syncLog.getFinishedAt() != null ? syncLog.getFinishedAt().toString() : null);
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.triggerSource"),
+                syncLog.getTriggerSource() != null ? syncLog.getTriggerSource().getId() : null);
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.syncScope"),
+                syncLog.getSyncScope() != null ? syncLog.getSyncScope().getId() : null);
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.status"),
+                syncLog.getStatus() != null ? syncLog.getStatus().getId() : null);
+        addMetaRow(content, messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.errorCode"),
+                syncLog.getErrorCode());
+
+        content.add(createReadOnlyArea(messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.errorMessage"),
+                syncLog.getErrorMessage()));
+        content.add(createReadOnlyArea(messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.requestPayloadJson"),
+                syncLog.getRequestPayloadJson()));
+        content.add(createReadOnlyArea(messageBundle.getMessage("app.rubeton.toniq.entity/EventSyncLog.responsePayloadJson"),
+                syncLog.getResponsePayloadJson()));
+
+        Button closeButton = uiComponents.create(Button.class);
+        closeButton.setText(messageBundle.getMessage("syncLogDetailsDialogClose"));
+        closeButton.addClickListener(click -> dialog.close());
+
+        content.add(closeButton);
+        dialog.add(content);
+        dialog.open();
+    }
+
+    private TextArea createReadOnlyArea(final String label, final String value) {
+        TextArea textArea = uiComponents.create(TextArea.class);
+        textArea.setLabel(label);
+        textArea.setValue(Objects.requireNonNullElse(value, ""));
+        textArea.setReadOnly(true);
+        textArea.setWidthFull();
+        textArea.setMinHeight("8em");
+        return textArea;
     }
 
     private JsonNode readJsonObject(final String rawJson) {

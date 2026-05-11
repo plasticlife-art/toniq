@@ -3,9 +3,15 @@ package app.rubeton.toniq.event;
 import app.rubeton.toniq.ToniqApplication;
 import app.rubeton.toniq.entity.Event;
 import app.rubeton.toniq.entity.EventPublicationSettings;
+import app.rubeton.toniq.entity.EventSyncLog;
+import app.rubeton.toniq.entity.EventSyncState;
 import app.rubeton.toniq.entity.EventTicketTier;
 import app.rubeton.toniq.entity.Organiser;
 import app.rubeton.toniq.entity.PublicationMode;
+import app.rubeton.toniq.entity.SyncLogScope;
+import app.rubeton.toniq.entity.SyncLogStatus;
+import app.rubeton.toniq.entity.SyncLogTriggerSource;
+import app.rubeton.toniq.entity.SyncResult;
 import app.rubeton.toniq.entity.TierAvailabilityState;
 import app.rubeton.toniq.view.event.EventDetailView;
 import app.rubeton.toniq.view.event.EventListView;
@@ -32,7 +38,6 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @UiTest
@@ -168,8 +173,74 @@ class EventUiTest {
         assertThat(modeGroup.getValue()).isEqualTo(PublicationMode.ON);
     }
 
+    @Test
+    void test_eventListShowsSyncSummaryColumnsAndLoadedSyncState() {
+        String suffix = uniqueSuffix();
+        Organiser organiser = saveOrganiser(suffix);
+        Event event = saveEvent(organiser, suffix);
+        EventSyncState syncState = saveSyncState(event, SyncResult.SUCCESS,
+                OffsetDateTime.parse("2026-05-11T10:15:00Z"),
+                OffsetDateTime.parse("2026-05-11T10:15:00Z"),
+                OffsetDateTime.parse("2026-05-11T10:11:00Z"));
+
+        viewNavigators.view(UiTestUtils.getCurrentView(), EventListView.class).navigate();
+
+        EventListView eventListView = UiTestUtils.getCurrentView();
+        DataGrid<Event> eventsDataGrid = UiTestUtils.getComponent(eventListView, "eventsDataGrid");
+        DataGridItems<Event> items = eventsDataGrid.getItems();
+
+        assertThat(eventsDataGrid.getColumns())
+                .extracting(column -> String.valueOf(column.getKey()))
+                .contains("publicationSettings.cryptoEnabled", "publicationSettings.published",
+                        "syncState.lastSyncedAt", "syncState.lastSyncResult", "syncState.lastAvailabilitySyncAt");
+        assertThat(items.getItems())
+                .extracting(Event::getMegatixEventId)
+                .contains(event.getMegatixEventId());
+        assertThat(items.getItems())
+                .filteredOn(loadedEvent -> event.getMegatixEventId().equals(loadedEvent.getMegatixEventId()))
+                .singleElement()
+                .satisfies(loadedEvent -> {
+                    assertThat(loadedEvent.getSyncState()).isNotNull();
+                    assertThat(loadedEvent.getSyncState().getId()).isEqualTo(syncState.getId());
+                    assertThat(loadedEvent.getSyncState().getLastSyncResult()).isEqualTo(SyncResult.SUCCESS);
+                });
+    }
+
+    @Test
+    void test_eventDetailShowsRecentSyncLogsAndOpensDetailsDialog() {
+        String suffix = uniqueSuffix();
+        Organiser organiser = saveOrganiser(suffix);
+        Event event = saveEvent(organiser, suffix);
+        saveSyncLog(event, "older-payload", SyncLogStatus.FAILURE, SyncLogTriggerSource.POLLING,
+                SyncLogScope.EVENT_REFRESH, OffsetDateTime.parse("2026-05-11T09:00:00Z"));
+        saveSyncLog(event, "latest-payload", SyncLogStatus.SUCCESS, SyncLogTriggerSource.MANUAL,
+                SyncLogScope.AVAILABILITY_REFRESH, OffsetDateTime.parse("2026-05-11T10:00:00Z"));
+
+        EventDetailView detailView = openEventDetail(event);
+        DataGrid<EventSyncLog> syncLogsDataGrid = UiTestUtils.getComponent(detailView, "syncLogsDataGrid");
+        Button viewSyncLogDetailsButton = UiTestUtils.getComponent(detailView, "viewSyncLogDetailsButton");
+
+        DataGridItems<EventSyncLog> items = syncLogsDataGrid.getItems();
+        assertThat(items).isNotNull();
+        assertThat(items.getItems())
+                .extracting(log -> log.getRequestPayloadJson())
+                .containsExactly("latest-payload", "older-payload");
+
+        EventSyncLog selectedLog = items.getItems().iterator().next();
+        syncLogsDataGrid.select(selectedLog);
+        viewSyncLogDetailsButton.click();
+    }
+
     @AfterEach
     void tearDown() {
+        dataManager.load(EventSyncLog.class)
+                .query("e.event.megatixEventId like ?1", "ui-event-%")
+                .list()
+                .forEach(dataManager::remove);
+        dataManager.load(EventSyncState.class)
+                .query("e.event.megatixEventId like ?1", "ui-event-%")
+                .list()
+                .forEach(dataManager::remove);
         dataManager.load(EventTicketTier.class)
                 .query("e.megatixTierId like ?1", "ui-tier-%")
                 .list()
@@ -221,6 +292,44 @@ class EventUiTest {
         event.setCreatedAt(nowUtc());
         event.setUpdatedAt(nowUtc());
         return dataManager.save(event);
+    }
+
+    private EventSyncState saveSyncState(final Event event,
+                                         final SyncResult result,
+                                         final OffsetDateTime lastSyncedAt,
+                                         final OffsetDateTime lastEventDataSyncAt,
+                                         final OffsetDateTime lastAvailabilitySyncAt) {
+        EventSyncState syncState = dataManager.create(EventSyncState.class);
+        syncState.setEvent(event);
+        syncState.setLastSyncedAt(lastSyncedAt);
+        syncState.setLastSyncResult(result);
+        syncState.setLastEventDataSyncAt(lastEventDataSyncAt);
+        syncState.setLastAvailabilitySyncAt(lastAvailabilitySyncAt);
+        syncState.setCreatedAt(nowUtc());
+        syncState.setUpdatedAt(nowUtc());
+        return dataManager.save(syncState);
+    }
+
+    private EventSyncLog saveSyncLog(final Event event,
+                                     final String payloadSeed,
+                                     final SyncLogStatus status,
+                                     final SyncLogTriggerSource triggerSource,
+                                     final SyncLogScope syncScope,
+                                     final OffsetDateTime startedAt) {
+        EventSyncLog syncLog = dataManager.create(EventSyncLog.class);
+        syncLog.setEvent(event);
+        syncLog.setMegatixEventId(event.getMegatixEventId());
+        syncLog.setTriggerSource(triggerSource);
+        syncLog.setSyncScope(syncScope);
+        syncLog.setStatus(status);
+        syncLog.setRequestPayloadJson(payloadSeed);
+        syncLog.setResponsePayloadJson("{\"seed\":\"" + payloadSeed + "\"}");
+        syncLog.setErrorCode(status == SyncLogStatus.FAILURE ? "sample_error" : null);
+        syncLog.setErrorMessage(status == SyncLogStatus.FAILURE ? "Sample failure for " + payloadSeed : null);
+        syncLog.setStartedAt(startedAt);
+        syncLog.setFinishedAt(startedAt.plusMinutes(2));
+        syncLog.setCreatedAt(startedAt);
+        return dataManager.save(syncLog);
     }
 
     private EventTicketTier saveTier(final Event event,

@@ -8,6 +8,7 @@
             <fetchPlan extends="_base">
                 <property name="organiser" fetchPlan="_base"/>
                 <property name="publicationSettings" fetchPlan="_base"/>
+                <property name="syncState" fetchPlan="_base"/>
             </fetchPlan>
             <loader id="eventsDl" readOnly="true">
                 <query>
@@ -54,13 +55,12 @@
             <columns resizable="true">
                 <column property="title"/>
                 <column property="megatixEventId"/>
-                <column property="organiser.name"/>
-                <column property="venueName"/>
                 <column property="eventStartAt"/>
-                <column property="timezoneName"/>
                 <column property="publicationSettings.publicationMode"/>
                 <column property="publicationSettings.publicationState"/>
-                <column property="deletedAt"/>
+                <column property="syncState.lastSyncedAt"/>
+                <column property="syncState.lastSyncResult"/>
+                <column property="syncState.lastAvailabilitySyncAt"/>
             </columns>
         </dataGrid>
         <hbox id="lookupActions" visible="false">

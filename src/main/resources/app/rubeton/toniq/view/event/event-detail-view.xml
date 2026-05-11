@@ -7,6 +7,7 @@
                   class="app.rubeton.toniq.entity.Event">
             <fetchPlan extends="_base">
                 <property name="organiser" fetchPlan="_base"/>
+                <property name="syncState" fetchPlan="_base"/>
                 <property name="ticketTiers">
                     <property name="name"/>
                     <property name="megatixTierId"/>
@@ -24,6 +25,20 @@
             <collection id="ticketTiersDc" property="ticketTiers"/>
             <loader/>
         </instance>
+        <collection id="syncLogsDc"
+                    class="app.rubeton.toniq.entity.EventSyncLog">
+            <fetchPlan extends="_base">
+                <property name="triggerSource"/>
+                <property name="syncScope"/>
+                <property name="status"/>
+                <property name="errorCode"/>
+                <property name="errorMessage"/>
+                <property name="requestPayloadJson"/>
+                <property name="responsePayloadJson"/>
+                <property name="startedAt"/>
+                <property name="finishedAt"/>
+            </fetchPlan>
+        </collection>
     </data>
     <actions>
         <action id="closeAction" type="detail_close"/>
@@ -66,6 +81,26 @@
                         <column property="lastAvailabilitySyncAt"/>
                     </columns>
                 </dataGrid>
+            </vbox>
+            <vbox id="syncLogsSection" colspan="2" classNames="event-detail-card">
+                <h4 id="syncLogsTitle" text="msg://app.rubeton.toniq.view.event/syncLogsSectionTitle"/>
+                <dataGrid id="syncLogsDataGrid"
+                          width="100%"
+                          minHeight="14em"
+                          allRowsVisible="true"
+                          emptyStateText="msg://app.rubeton.toniq.view.event/noSyncLogs"
+                          dataContainer="syncLogsDc">
+                    <columns resizable="true">
+                        <column property="startedAt"/>
+                        <column property="triggerSource"/>
+                        <column property="syncScope"/>
+                        <column property="status"/>
+                        <column property="errorCode"/>
+                        <column property="errorMessage"/>
+                    </columns>
+                </dataGrid>
+                <button id="viewSyncLogDetailsButton"
+                        text="msg://app.rubeton.toniq.view.event/viewSyncLogDetailsButton"/>
             </vbox>
         </formLayout>
         <hbox id="detailActions">
