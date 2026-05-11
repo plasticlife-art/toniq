@@ -56,7 +56,7 @@
 }
 
 .event-detail-card__title {
-  margin: 0 0 var(--lumo-space-m);
+  margin: 0 0 var(--lumo-space-s);
   font-size: var(--lumo-font-size-m);
 }
 
@@ -124,8 +124,43 @@
 }
 
 .publication-mode-group {
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 var(--lumo-space-s);
+}
+
+.publication-mode-group::part(label),
+.publication-mode-group::part(group-field) {
   display: block;
-  margin-bottom: var(--lumo-space-m);
+  margin-top: 0;
+  margin-bottom: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
+.publication-mode-group::part(helper-text),
+.publication-mode-group::part(error-message) {
+  display: none;
+}
+
+.publication-mode-group vaadin-radio-button:first-child {
+  margin-inline-start: 0;
+}
+
+.publication-apply-button {
+  display: block;
+  width: fit-content;
+  margin: 0 0 var(--lumo-space-m);
+}
+
+.publication-current-state-label {
+  display: block;
+  margin: 0 0 var(--lumo-space-s);
+  font-size: var(--lumo-font-size-s);
+  font-weight: 600;
+  color: var(--lumo-secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .publication-status-badges {

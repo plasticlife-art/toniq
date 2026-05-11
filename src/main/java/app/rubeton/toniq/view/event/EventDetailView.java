@@ -117,12 +117,19 @@ public class EventDetailView extends StandardDetailView<Event> {
         EventPublicationSettings settings = eventPublicationService.ensurePublicationSettings(event);
         PublicationDecision decision = eventPublicationService.getDecision(event);
 
+        Span modeLabel = uiComponents.create(Span.class);
+        modeLabel.setText(messageBundle.getMessage("publicationModeLabel") + ":");
+        modeLabel.addClassName("publication-current-state-label");
+
         publicationModeGroup = new RadioButtonGroup<>();
-        publicationModeGroup.setLabel(messageBundle.getMessage("publicationModeLabel"));
         publicationModeGroup.setItems(PublicationMode.values());
         publicationModeGroup.setItemLabelGenerator(this::getPublicationModeLabel);
         publicationModeGroup.setValue(settings.getPublicationMode());
         publicationModeGroup.addClassName("publication-mode-group");
+
+        Span currentStateLabel = uiComponents.create(Span.class);
+        currentStateLabel.setText("Current State:");
+        currentStateLabel.addClassName("publication-current-state-label");
 
         Div badges = uiComponents.create(Div.class);
         badges.addClassName("publication-status-badges");
@@ -140,18 +147,13 @@ public class EventDetailView extends StandardDetailView<Event> {
         webhookHint.addClassName("publication-webhook-hint");
         webhookHint.setText(decision.webhookHint());
 
-        Paragraph reason = uiComponents.create(Paragraph.class);
-        reason.addClassName("publication-block-reason");
-        reason.setText(decision.blockedReason() != null
-                ? decision.blockedReason()
-                : messageBundle.getMessage("publicationReasonReady"));
-
         Button applyButton = uiComponents.create(Button.class);
         applyButton.setId("applyPublicationModeButton");
         applyButton.setText(messageBundle.getMessage("publicationApplyButton"));
+        applyButton.addClassName("publication-apply-button");
         applyButton.addClickListener(click -> applyPublicationMode());
 
-        publicationControlContainer.add(publicationModeGroup, badges, webhookHint, reason, applyButton);
+        publicationControlContainer.add(modeLabel, publicationModeGroup, applyButton, currentStateLabel, badges, webhookHint);
     }
 
     private void applyPublicationMode() {
