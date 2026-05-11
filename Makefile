@@ -5,8 +5,9 @@ tag ?=
 sha ?=
 env ?= prod
 side ?=
+ENV_FILE ?= .env
 
-.PHONY: clean-cache run docker deploy deploy-prod deploy-test stop start restart reload-env
+.PHONY: clean-cache run dev dev-frontend dev-frontend-stop dev-all docker deploy deploy-prod deploy-test stop start restart reload-env
 
 clean-cache:
 	@echo "Cleaning build and caches..."
@@ -18,6 +19,40 @@ run:
 	else \
 	  ./gradlew bootRun; \
 	fi
+
+dev:
+	@set -euo pipefail; \
+	test -f "$(ENV_FILE)"; \
+	set -a; \
+	source "$(ENV_FILE)"; \
+	set +a; \
+	docker compose --env-file "$(ENV_FILE)" up -d db; \
+	DB_NAME="$${POSTGRES_DB:-toniq}"; \
+	DB_USER="$${POSTGRES_USER:-toniq}"; \
+	DB_PORT="$$(docker compose --env-file "$(ENV_FILE)" port db 5432 | sed -E 's/.*:([0-9]+)$$/\1/')"; \
+	for _ in {1..60}; do \
+	  if docker compose --env-file "$(ENV_FILE)" ps --format json db | grep -q '"Health":"healthy"'; then \
+	    break; \
+	  fi; \
+	  sleep 1; \
+	done; \
+	if ! docker compose --env-file "$(ENV_FILE)" exec -T db psql -U "$${DB_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$${DB_NAME}'" | grep -q 1; then \
+	  docker compose --env-file "$(ENV_FILE)" exec -T db createdb -U "$${DB_USER}" "$${DB_NAME}"; \
+	fi; \
+	MAIN_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$${DB_PORT}/$${DB_NAME}" \
+	MAIN_DATASOURCE_USERNAME="$${DB_USER}" \
+	MAIN_DATASOURCE_PASSWORD="$${POSTGRES_PASSWORD:-toniq}" \
+	./gradlew bootRun
+
+dev-frontend:
+	@docker compose --env-file "$(ENV_FILE)" -f docker-compose.dev.yml up -d frontend-dev
+
+dev-frontend-stop:
+	@docker compose --env-file "$(ENV_FILE)" -f docker-compose.dev.yml stop frontend-dev
+
+dev-all:
+	@$(MAKE) dev-frontend
+	@$(MAKE) dev
 
 docker:
 	@:

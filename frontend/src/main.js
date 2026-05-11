@@ -11,9 +11,11 @@ import {
 } from "./app.js";
 
 const appRoot = document.getElementById("app");
+const REFRESH_BUTTON_SETTLE_MS = 320;
 const liveRefreshState = {
   requestUrl: null,
-  inFlight: false
+  inFlight: false,
+  hasManualRefresh: false
 };
 
 boot().catch(() => {
@@ -90,14 +92,32 @@ function renderEvent(payload, apiBaseUrl = getPublicApiBaseUrl()) {
     </section>
     <section class="content-grid">
       <aside class="panel panel--tickets">
-        <div class="panel__header">
-          <p class="panel__eyebrow">Tickets</p>
-          <h2>Availability snapshot</h2>
-          <p class="panel__subtle">${escapeHtml(formatAvailabilityMeta(availability))}</p>
-          <div class="panel__actions">
-            <button class="refresh-button" type="button" data-live-refresh ${liveRefreshState.requestUrl ? "" : "disabled"}>
-              Refresh live
-            </button>
+        <div class="panel__header panel__header--tickets">
+          <div class="panel__header-main">
+            <p class="panel__eyebrow">Tickets</p>
+            <h2>Availability</h2>
+            ${renderAvailabilityMeta(availability)}
+          </div>
+          <div class="panel__header-side">
+            <div class="icon-button-wrap">
+              <button
+                class="refresh-icon-button"
+                type="button"
+                data-live-refresh
+                aria-label="Refresh ticket availability"
+                ${liveRefreshState.requestUrl ? "" : "disabled"}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M7.5 7.5A6.5 6.5 0 0 1 18 9" />
+                  <path d="M18 5.5V9.5H14" />
+                  <path d="M16.5 16.5A6.5 6.5 0 0 1 6 15" />
+                  <path d="M6 18.5v-4h4" />
+                </svg>
+              </button>
+              <span class="icon-button-tooltip" role="tooltip">
+                Refreshes ticket availability directly from Megatix.
+              </span>
+            </div>
             <p class="panel__feedback" data-live-refresh-feedback></p>
           </div>
         </div>
@@ -162,11 +182,19 @@ function renderTickets(tickets) {
   `;
 }
 
-function formatAvailabilityMeta(availability) {
+function formatAvailabilityMeta(availability, hasManualRefresh = false) {
+  if (!hasManualRefresh) {
+    return "";
+  }
   if (!availability?.lastUpdatedAt) {
     return "Snapshot pending";
   }
   return `Last updated ${formatDate(availability.lastUpdatedAt)}`;
+}
+
+function renderAvailabilityMeta(availability) {
+  const text = formatAvailabilityMeta(availability, liveRefreshState.hasManualRefresh);
+  return text ? `<p class="panel__subtle">${escapeHtml(text)}</p>` : "";
 }
 
 function renderAvailability(ticket) {
@@ -246,8 +274,9 @@ async function refreshLiveAvailability(apiBaseUrl) {
   const button = appRoot.querySelector("[data-live-refresh]");
   const feedback = appRoot.querySelector("[data-live-refresh-feedback]");
   if (button) {
+    button.classList.remove("is-settling");
     button.disabled = true;
-    button.textContent = "Refreshing...";
+    button.classList.add("is-loading");
   }
   if (feedback) {
     feedback.textContent = "";
@@ -269,6 +298,7 @@ async function refreshLiveAvailability(apiBaseUrl) {
       return;
     }
     const payload = await response.json();
+    liveRefreshState.hasManualRefresh = true;
     renderEvent(payload, apiBaseUrl);
   } catch {
     if (feedback) {
@@ -279,7 +309,15 @@ async function refreshLiveAvailability(apiBaseUrl) {
     const nextButton = appRoot.querySelector("[data-live-refresh]");
     if (nextButton) {
       nextButton.disabled = !liveRefreshState.requestUrl;
-      nextButton.textContent = "Refresh live";
+      finishRefreshButtonAnimation(nextButton);
     }
   }
+}
+
+function finishRefreshButtonAnimation(button) {
+  button.classList.remove("is-loading");
+  button.classList.add("is-settling");
+  globalThis.window?.setTimeout(() => {
+    button.classList.remove("is-settling");
+  }, REFRESH_BUTTON_SETTLE_MS);
 }

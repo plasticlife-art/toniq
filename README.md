@@ -16,6 +16,37 @@ For local development, run the backend directly:
 ./gradlew bootRun
 ```
 
+To use PostgreSQL from Docker without rebuilding the application image on every change:
+
+```bash
+make dev
+```
+
+This starts only the `db` container and then runs the backend locally with
+`MAIN_DATASOURCE_*` pointed at that PostgreSQL instance. By default it reads
+variables from `.env`. You can override that, for example:
+
+```bash
+make dev ENV_FILE=.env.test
+```
+
+To run the public frontend in fast dev mode without rebuilding its image:
+
+```bash
+make dev-frontend
+```
+
+This starts an `nginx` container on <http://127.0.0.1:8081> with `frontend/src`
+mounted directly from the working tree and `/api/*` proxied to the local backend
+on `127.0.0.1:8080`. It also uses `.env` by default and supports
+`ENV_FILE=...` the same way as `make dev`.
+
+To run both together:
+
+```bash
+make dev-all
+```
+
 ## Running
 
 The backend application will be available at <http://localhost:8080>.
