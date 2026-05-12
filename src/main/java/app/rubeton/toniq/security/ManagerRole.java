@@ -35,4 +35,27 @@ public interface ManagerRole extends UiMinimalPolicies {
     @EntityPolicy(entityName = "EventSyncLog", actions = EntityPolicyAction.READ)
     @EntityAttributePolicy(entityName = "EventSyncLog", attributes = "*", action = EntityAttributePolicyAction.VIEW)
     void eventSyncLog();
+
+    @EntityPolicy(entityName = "EventSyncState", actions = EntityPolicyAction.READ)
+    @EntityAttributePolicy(entityName = "EventSyncState", attributes = "*", action = EntityAttributePolicyAction.VIEW)
+    void eventSyncState();
+
+    @EntityPolicy(entityName = "EventStatusOverride", actions = EntityPolicyAction.READ)
+    @EntityAttributePolicy(entityName = "EventStatusOverride", attributes = "*", action = EntityAttributePolicyAction.VIEW)
+    void eventStatusOverride();
+
+    @EntityPolicy(
+            entityName = "EventPublicationSettings",
+            actions = {
+                    EntityPolicyAction.READ,
+                    EntityPolicyAction.CREATE,
+                    EntityPolicyAction.UPDATE
+            }
+    )
+    @EntityAttributePolicy(
+            entityName = "EventPublicationSettings",
+            attributes = "*",
+            action = EntityAttributePolicyAction.MODIFY
+    )
+    void eventPublicationSettings();
 }
