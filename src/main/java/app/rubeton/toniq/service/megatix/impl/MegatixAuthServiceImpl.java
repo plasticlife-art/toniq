@@ -6,7 +6,7 @@ import app.rubeton.toniq.service.megatix.MegatixClientException;
 import app.rubeton.toniq.service.megatix.MegatixConfigurationException;
 import app.rubeton.toniq.service.megatix.dto.MegatixLoginRequestDto;
 import app.rubeton.toniq.service.megatix.dto.MegatixLoginResponseDto;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -16,13 +16,18 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 @Service
-@RequiredArgsConstructor
 public class MegatixAuthServiceImpl implements MegatixAuthService {
 
-    private final RestClient.Builder restClientBuilder;
+    private final RestClient megatixRestClient;
     private final MegatixProperties megatixProperties;
 
     private volatile CachedToken cachedToken;
+
+    public MegatixAuthServiceImpl(@Qualifier("megatixRestClient") final RestClient megatixRestClient,
+                                  final MegatixProperties megatixProperties) {
+        this.megatixRestClient = megatixRestClient;
+        this.megatixProperties = megatixProperties;
+    }
 
     @Override
     public String getValidAccessToken() {
@@ -50,9 +55,8 @@ public class MegatixAuthServiceImpl implements MegatixAuthService {
     }
 
     private CachedToken login() {
-        RestClient client = restClientBuilder.baseUrl(trimTrailingSlash(megatixProperties.getBaseUrl())).build();
         try {
-            MegatixLoginResponseDto response = client.post()
+            MegatixLoginResponseDto response = megatixRestClient.post()
                     .uri("/api/v3/accounts/login")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(new MegatixLoginRequestDto(megatixProperties.getEmail(), megatixProperties.getPassword()))
@@ -86,13 +90,6 @@ public class MegatixAuthServiceImpl implements MegatixAuthService {
 
     private boolean isBlank(final String value) {
         return value == null || value.isBlank();
-    }
-
-    private String trimTrailingSlash(final String value) {
-        if (value == null) {
-            return null;
-        }
-        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private record CachedToken(String accessToken, OffsetDateTime expiresAt) {

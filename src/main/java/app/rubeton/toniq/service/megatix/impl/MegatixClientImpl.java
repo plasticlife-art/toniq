@@ -1,18 +1,16 @@
 package app.rubeton.toniq.service.megatix.impl;
 
-import app.rubeton.toniq.config.MegatixProperties;
 import app.rubeton.toniq.service.MegatixClient;
 import app.rubeton.toniq.service.megatix.MegatixAuthService;
 import app.rubeton.toniq.service.megatix.MegatixClientException;
-import app.rubeton.toniq.service.megatix.dto.MegatixApiEnvelopeDto;
 import app.rubeton.toniq.service.megatix.dto.MegatixEventDetailsDto;
 import app.rubeton.toniq.service.megatix.dto.MegatixPromoterDto;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import app.rubeton.toniq.service.megatix.model.MegatixEventDetailsResponse;
 import app.rubeton.toniq.service.megatix.model.MegatixPromoterResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -20,13 +18,19 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-@RequiredArgsConstructor
 public class MegatixClientImpl implements MegatixClient {
 
-    private final RestClient.Builder restClientBuilder;
-    private final MegatixProperties megatixProperties;
+    private final RestClient megatixRestClient;
     private final MegatixAuthService megatixAuthService;
     private final ObjectMapper objectMapper;
+
+    public MegatixClientImpl(@Qualifier("megatixRestClient") final RestClient megatixRestClient,
+                             final MegatixAuthService megatixAuthService,
+                             final ObjectMapper objectMapper) {
+        this.megatixRestClient = megatixRestClient;
+        this.megatixAuthService = megatixAuthService;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public MegatixEventDetailsResponse fetchEventDetails(final String eventId) {
@@ -61,8 +65,7 @@ public class MegatixClientImpl implements MegatixClient {
     }
 
     private String executeAuthorizedGet(final String uriTemplate, final String eventId) {
-        RestClient client = restClientBuilder.baseUrl(trimTrailingSlash(megatixProperties.getBaseUrl())).build();
-        return client.get()
+        return megatixRestClient.get()
                 .uri(uriTemplate, eventId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + megatixAuthService.getValidAccessToken())
                 .accept(MediaType.APPLICATION_JSON)
@@ -78,12 +81,5 @@ public class MegatixClientImpl implements MegatixClient {
         } catch (JsonProcessingException e) {
             throw new MegatixClientException("Failed to parse Megatix response", e);
         }
-    }
-
-    private String trimTrailingSlash(final String value) {
-        if (value == null) {
-            return null;
-        }
-        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }
